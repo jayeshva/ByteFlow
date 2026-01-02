@@ -1,0 +1,854 @@
+openapi: 3.0.3
+info:
+  title: Instaflow API
+  version: 1.0.0
+  description: Authentication and Instagram connection endpoints.
+servers:
+  - url: http://localhost:4000
+    description: Local development
+tags:
+  - name: Auth
+    description: Authentication and credential workflows
+  - name: Instagram
+    description: Instagram OAuth connection and account status
+paths:
+  /auth/signup:
+    post:
+      tags:
+        - Auth
+      summary: Create a new account
+      operationId: signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupRequest"
+            example:
+              email: user@example.com
+              password: StrongPassword123!
+      responses:
+        "201":
+          description: Signup successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupResponse"
+              example:
+                message: Signup successful. Please verify your email.
+                user:
+                  id: 5bb7a3d3-54c9-4f4a-9f5f-2ce0c7601c2d
+                  email: user@example.com
+                  tenantId: 3cb2f59c-fb8b-4a6c-8b7a-fd93f4aa8402
+        "400":
+          description: Validation or signup error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Email and password are required
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Login with email and password
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: user@example.com
+              password: StrongPassword123!
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+              example:
+                message: Login successful
+                user:
+                  id: 5bb7a3d3-54c9-4f4a-9f5f-2ce0c7601c2d
+                  email: user@example.com
+                  tenantId: 3cb2f59c-fb8b-4a6c-8b7a-fd93f4aa8402
+                  role: owner
+                accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        "400":
+          description: Validation or login error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid email or password
+  /auth/verify-email:
+    post:
+      tags:
+        - Auth
+      summary: Verify an email address
+      operationId: verifyEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailRequest"
+            example:
+              email: user@example.com
+              code: 4e3b2d1c-0f9a-4b38-9c2a-5ef7c4a7d1f1
+      responses:
+        "200":
+          description: Email verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                message: Email verified successfully
+        "400":
+          description: Verification error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid verification code
+  /auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh access token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenRequest"
+            example:
+              refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        "200":
+          description: Access token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshTokenResponse"
+              example:
+                accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        "401":
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid refresh token
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Logout by blacklisting access token
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                message: Logged out successfully
+        "400":
+          description: Missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Token required
+  /auth/forgot-password:
+    post:
+      tags:
+        - Auth
+      summary: Send a password reset code
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+            example:
+              email: user@example.com
+      responses:
+        "200":
+          description: Reset code sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                message: Reset code sent
+        "400":
+          description: Forgot password error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: User not found
+  /auth/reset-password:
+    post:
+      tags:
+        - Auth
+      summary: Reset password using reset token
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+            example:
+              email: user@example.com
+              token: 8b980b49-4e03-4b6e-84f2-8f4de3b22c12
+              password: NewStrongPassword123!
+      responses:
+        "200":
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                message: Password reset successful
+        "400":
+          description: Reset password error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid or expired reset token
+  /auth/otp/send:
+    post:
+      tags:
+        - Auth
+      summary: Send a one-time password
+      operationId: sendOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtpSendRequest"
+            example:
+              email: user@example.com
+      responses:
+        "200":
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                message: OTP sent
+        "400":
+          description: OTP send error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: User not found
+  /auth/otp/verify:
+    post:
+      tags:
+        - Auth
+      summary: Verify OTP and login
+      operationId: verifyOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtpVerifyRequest"
+            example:
+              email: user@example.com
+              otp: "123456"
+      responses:
+        "200":
+          description: OTP verified, login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OtpVerifyResponse"
+              example:
+                message: Login successful
+                user:
+                  id: 5bb7a3d3-54c9-4f4a-9f5f-2ce0c7601c2d
+                  email: user@example.com
+                  tenantId: 3cb2f59c-fb8b-4a6c-8b7a-fd93f4aa8402
+                accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        "400":
+          description: OTP verify error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid OTP
+  /instagram/connect-url:
+    get:
+      tags:
+        - Instagram
+      summary: Get Instagram OAuth login URL
+      operationId: getInstagramConnectUrl
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Login URL generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectUrlResponse"
+              example:
+                url: https://www.instagram.com/oauth/authorize?client_id=...&redirect_uri=...&response_type=code&scope=...
+        "401":
+          description: Missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Missing token
+        "403":
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid token
+  /instagram/callback:
+    get:
+      tags:
+        - Instagram
+      summary: OAuth callback handler
+      operationId: instagramCallback
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+          description: OAuth authorization code
+        - in: query
+          name: state
+          required: false
+          schema:
+            type: string
+          description: Tenant ID state value (if provided)
+      responses:
+        "302":
+          description: Redirect to frontend success page
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Success redirect URL
+        "400":
+          description: Instagram connection failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallbackErrorResponse"
+              example:
+                message: Instagram connection failed
+                error: Invalid authorization code
+  /instagram/disconnect:
+    post:
+      tags:
+        - Instagram
+      summary: Disconnect Instagram account for tenant
+      operationId: disconnectInstagram
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Instagram disconnected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                message: Instagram disconnected
+        "401":
+          description: Missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Missing token
+        "403":
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid token
+  /instagram/status:
+    get:
+      tags:
+        - Instagram
+      summary: Verify Instagram connection status
+      operationId: verifyInstagramConnection
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstagramStatusResponse"
+              examples:
+                connected:
+                  summary: Connected
+                  value:
+                    connected: true
+                    account:
+                      id: 9d0ccf2a-cf0b-4b2f-8fa4-4cbdc1a1f5ed
+                      tenantId: 3cb2f59c-fb8b-4a6c-8b7a-fd93f4aa8402
+                      igBusinessId: 17841400000000000
+                      igUsername: instaflow
+                      isActive: true
+                disconnected:
+                  summary: Not connected
+                  value:
+                    connected: false
+        "401":
+          description: Missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Missing token
+        "403":
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid token
+  /instagram/posts:
+    get:
+      tags:
+        - Instagram
+      summary: Fetch Instagram posts
+      operationId: getInstagramPosts
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Posts list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstagramPostsResponse"
+              example:
+                posts:
+                  - id: 17900000000000000
+                    caption: Hello from Instagram
+                    media_type: IMAGE
+                    media_url: https://example.com/media.jpg
+                    timestamp: 2024-12-25T10:00:00Z
+        "404":
+          description: No Instagram account connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: No IG account connected
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Internal server error
+  /instagram/posts/{mediaId}/comments:
+    get:
+      tags:
+        - Instagram
+      summary: Fetch comments for a media item
+      operationId: getInstagramComments
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: mediaId
+          required: true
+          schema:
+            type: string
+          description: Instagram media ID
+      responses:
+        "200":
+          description: Comments list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstagramCommentsResponse"
+              example:
+                comments:
+                  - id: 18000000000000000
+                    text: Nice post!
+                    username: ig_user
+                    timestamp: 2024-12-25T11:00:00Z
+        "404":
+          description: No Instagram account connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: No IG account connected
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Internal server error
+  /instagram/subscribe-comments:
+    post:
+      tags:
+        - Instagram
+      summary: Subscribe to Instagram comment events
+      operationId: subscribeInstagramComments
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Subscribed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                message: Subscribed to comments successfully
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Failed to subscribe
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+    CallbackErrorResponse:
+      type: object
+      required:
+        - message
+        - error
+      properties:
+        message:
+          type: string
+        error:
+          type: string
+    MessageResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+    ConnectUrlResponse:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          format: uri
+    InstagramAccount:
+      type: object
+      description: Instagram account record returned from the database.
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        igBusinessId:
+          type: string
+        igUsername:
+          type: string
+        tokenCiphertext:
+          type: string
+          format: byte
+        tokenKeyBlob:
+          type: string
+          format: byte
+        tokenNonce:
+          type: string
+          format: byte
+        tokenAlg:
+          type: string
+        tokenExpiresAt:
+          type: string
+          format: date-time
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    InstagramStatusResponse:
+      type: object
+      required:
+        - connected
+      properties:
+        connected:
+          type: boolean
+        account:
+          $ref: "#/components/schemas/InstagramAccount"
+    InstagramPost:
+      type: object
+      properties:
+        id:
+          type: string
+        caption:
+          type: string
+          nullable: true
+        media_type:
+          type: string
+        media_url:
+          type: string
+          format: uri
+        timestamp:
+          type: string
+          format: date-time
+    InstagramComment:
+      type: object
+      properties:
+        id:
+          type: string
+        text:
+          type: string
+        username:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+    InstagramPostsResponse:
+      type: object
+      required:
+        - posts
+      properties:
+        posts:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstagramPost"
+    InstagramCommentsResponse:
+      type: object
+      required:
+        - comments
+      properties:
+        comments:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstagramComment"
+    UserPublic:
+      type: object
+      required:
+        - id
+        - email
+        - tenantId
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        tenantId:
+          type: string
+          format: uuid
+    UserWithRole:
+      allOf:
+        - $ref: "#/components/schemas/UserPublic"
+        - type: object
+          required:
+            - role
+          properties:
+            role:
+              type: string
+    SignupRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    VerifyEmailRequest:
+      type: object
+      required:
+        - email
+        - code
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+    ForgotPasswordRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+    ResetPasswordRequest:
+      type: object
+      required:
+        - email
+        - token
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        token:
+          type: string
+        password:
+          type: string
+          format: password
+    OtpSendRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+    OtpVerifyRequest:
+      type: object
+      required:
+        - email
+        - otp
+      properties:
+        email:
+          type: string
+          format: email
+        otp:
+          type: string
+          pattern: "^[0-9]{6}$"
+    SignupResponse:
+      type: object
+      required:
+        - message
+        - user
+      properties:
+        message:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserPublic"
+    LoginResponse:
+      type: object
+      required:
+        - message
+        - user
+        - accessToken
+        - refreshToken
+      properties:
+        message:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserWithRole"
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+    RefreshTokenResponse:
+      type: object
+      required:
+        - accessToken
+      properties:
+        accessToken:
+          type: string
+    OtpVerifyResponse:
+      type: object
+      required:
+        - message
+        - user
+        - accessToken
+        - refreshToken
+      properties:
+        message:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserPublic"
+        accessToken:
+          type: string
+        refreshToken:
+          type: string

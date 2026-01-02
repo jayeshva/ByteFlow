@@ -1,0 +1,7 @@
+{
+  "name": "InstaFlow Automator",
+  "description": "A powerful dashboard for Instagram creators to automate Direct Message replies based on post comments. Use AI to craft the perfect responses and set custom triggers like exact matches or keyword detection.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

@@ -1,0 +1,397 @@
+openapi: 3.0.3
+info:
+  title: Instaflow Instagram API
+  version: 1.0.0
+  description: Instagram connection and status endpoints.
+servers:
+  - url: http://localhost:4000
+    description: Local development
+tags:
+  - name: Instagram
+    description: Instagram OAuth connection and account status
+paths:
+  /instagram/connect-url:
+    get:
+      tags:
+        - Instagram
+      summary: Get Instagram OAuth login URL
+      operationId: getInstagramConnectUrl
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Login URL generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectUrlResponse"
+              example:
+                url: https://www.instagram.com/oauth/authorize?client_id=...&redirect_uri=...&response_type=code&scope=...
+        "401":
+          description: Missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Missing token
+        "403":
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid token
+  /instagram/callback:
+    get:
+      tags:
+        - Instagram
+      summary: OAuth callback handler
+      operationId: instagramCallback
+      parameters:
+        - in: query
+          name: code
+          required: true
+          schema:
+            type: string
+          description: OAuth authorization code
+        - in: query
+          name: state
+          required: false
+          schema:
+            type: string
+          description: Tenant ID state value (if provided)
+      responses:
+        "302":
+          description: Redirect to frontend success page
+          headers:
+            Location:
+              schema:
+                type: string
+              description: Success redirect URL
+        "400":
+          description: Instagram connection failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CallbackErrorResponse"
+              example:
+                message: Instagram connection failed
+                error: Invalid authorization code
+  /instagram/disconnect:
+    post:
+      tags:
+        - Instagram
+      summary: Disconnect Instagram account for tenant
+      operationId: disconnectInstagram
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Instagram disconnected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                message: Instagram disconnected
+        "401":
+          description: Missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Missing token
+        "403":
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid token
+  /instagram/status:
+    get:
+      tags:
+        - Instagram
+      summary: Verify Instagram connection status
+      operationId: verifyInstagramConnection
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstagramStatusResponse"
+              examples:
+                connected:
+                  summary: Connected
+                  value:
+                    connected: true
+                    account:
+                      id: 9d0ccf2a-cf0b-4b2f-8fa4-4cbdc1a1f5ed
+                      tenantId: 3cb2f59c-fb8b-4a6c-8b7a-fd93f4aa8402
+                      igBusinessId: 17841400000000000
+                      igUsername: instaflow
+                      isActive: true
+                disconnected:
+                  summary: Not connected
+                  value:
+                    connected: false
+        "401":
+          description: Missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Missing token
+        "403":
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid token
+  /instagram/posts:
+    get:
+      tags:
+        - Instagram
+      summary: Fetch Instagram posts
+      operationId: getInstagramPosts
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Posts list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstagramPostsResponse"
+              example:
+                posts:
+                  - id: 17900000000000000
+                    caption: Hello from Instagram
+                    media_type: IMAGE
+                    media_url: https://example.com/media.jpg
+                    timestamp: 2024-12-25T10:00:00Z
+        "404":
+          description: No Instagram account connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: No IG account connected
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Internal server error
+  /instagram/posts/{mediaId}/comments:
+    get:
+      tags:
+        - Instagram
+      summary: Fetch comments for a media item
+      operationId: getInstagramComments
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: mediaId
+          required: true
+          schema:
+            type: string
+          description: Instagram media ID
+      responses:
+        "200":
+          description: Comments list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstagramCommentsResponse"
+              example:
+                comments:
+                  - id: 18000000000000000
+                    text: Nice post!
+                    username: ig_user
+                    timestamp: 2024-12-25T11:00:00Z
+        "404":
+          description: No Instagram account connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: No IG account connected
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Internal server error
+  /instagram/subscribe-comments:
+    post:
+      tags:
+        - Instagram
+      summary: Subscribe to Instagram comment events
+      operationId: subscribeInstagramComments
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Subscribed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                message: Subscribed to comments successfully
+        "500":
+          description: Server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Failed to subscribe
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+    CallbackErrorResponse:
+      type: object
+      required:
+        - message
+        - error
+      properties:
+        message:
+          type: string
+        error:
+          type: string
+    MessageResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+    ConnectUrlResponse:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          format: uri
+    InstagramAccount:
+      type: object
+      description: Instagram account record returned from the database.
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        igBusinessId:
+          type: string
+        igUsername:
+          type: string
+        tokenCiphertext:
+          type: string
+          format: byte
+        tokenKeyBlob:
+          type: string
+          format: byte
+        tokenNonce:
+          type: string
+          format: byte
+        tokenAlg:
+          type: string
+        tokenExpiresAt:
+          type: string
+          format: date-time
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    InstagramStatusResponse:
+      type: object
+      required:
+        - connected
+      properties:
+        connected:
+          type: boolean
+        account:
+          $ref: "#/components/schemas/InstagramAccount"
+    InstagramPost:
+      type: object
+      properties:
+        id:
+          type: string
+        caption:
+          type: string
+          nullable: true
+        media_type:
+          type: string
+        media_url:
+          type: string
+          format: uri
+        timestamp:
+          type: string
+          format: date-time
+    InstagramComment:
+      type: object
+      properties:
+        id:
+          type: string
+        text:
+          type: string
+        username:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+    InstagramPostsResponse:
+      type: object
+      required:
+        - posts
+      properties:
+        posts:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstagramPost"
+    InstagramCommentsResponse:
+      type: object
+      required:
+        - comments
+      properties:
+        comments:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstagramComment"

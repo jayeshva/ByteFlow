@@ -1,0 +1,488 @@
+openapi: 3.0.3
+info:
+  title: Instaflow Auth API
+  version: 1.0.0
+  description: Authentication endpoints for email/password, email verification, and OTP login.
+servers:
+  - url: http://localhost:4000
+    description: Local development
+tags:
+  - name: Auth
+    description: Authentication and credential workflows
+paths:
+  /auth/signup:
+    post:
+      tags:
+        - Auth
+      summary: Create a new account
+      operationId: signup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupRequest"
+            example:
+              email: user@example.com
+              password: StrongPassword123!
+      responses:
+        "201":
+          description: Signup successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SignupResponse"
+              example:
+                message: Signup successful. Please verify your email.
+                user:
+                  id: 5bb7a3d3-54c9-4f4a-9f5f-2ce0c7601c2d
+                  email: user@example.com
+                  tenantId: 3cb2f59c-fb8b-4a6c-8b7a-fd93f4aa8402
+        "400":
+          description: Validation or signup error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Email and password are required
+  /auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Login with email and password
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: user@example.com
+              password: StrongPassword123!
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+              example:
+                message: Login successful
+                user:
+                  id: 5bb7a3d3-54c9-4f4a-9f5f-2ce0c7601c2d
+                  email: user@example.com
+                  tenantId: 3cb2f59c-fb8b-4a6c-8b7a-fd93f4aa8402
+                  role: owner
+                accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        "400":
+          description: Validation or login error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid email or password
+  /auth/verify-email:
+    post:
+      tags:
+        - Auth
+      summary: Verify an email address
+      operationId: verifyEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailRequest"
+            example:
+              email: user@example.com
+              code: 4e3b2d1c-0f9a-4b38-9c2a-5ef7c4a7d1f1
+      responses:
+        "200":
+          description: Email verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                message: Email verified successfully
+        "400":
+          description: Verification error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid verification code
+  /auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh access token
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshTokenRequest"
+            example:
+              refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+      responses:
+        "200":
+          description: Access token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefreshTokenResponse"
+              example:
+                accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        "401":
+          description: Invalid refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid refresh token
+  /auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Logout by blacklisting access token
+      operationId: logout
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                message: Logged out successfully
+        "400":
+          description: Missing token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Token required
+  /auth/forgot-password:
+    post:
+      tags:
+        - Auth
+      summary: Send a password reset code
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+            example:
+              email: user@example.com
+      responses:
+        "200":
+          description: Reset code sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                message: Reset code sent
+        "400":
+          description: Forgot password error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: User not found
+  /auth/reset-password:
+    post:
+      tags:
+        - Auth
+      summary: Reset password using reset token
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+            example:
+              email: user@example.com
+              token: 8b980b49-4e03-4b6e-84f2-8f4de3b22c12
+              password: NewStrongPassword123!
+      responses:
+        "200":
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                message: Password reset successful
+        "400":
+          description: Reset password error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid or expired reset token
+  /auth/otp/send:
+    post:
+      tags:
+        - Auth
+      summary: Send a one-time password
+      operationId: sendOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtpSendRequest"
+            example:
+              email: user@example.com
+      responses:
+        "200":
+          description: OTP sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                message: OTP sent
+        "400":
+          description: OTP send error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: User not found
+  /auth/otp/verify:
+    post:
+      tags:
+        - Auth
+      summary: Verify OTP and login
+      operationId: verifyOtp
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OtpVerifyRequest"
+            example:
+              email: user@example.com
+              otp: "123456"
+      responses:
+        "200":
+          description: OTP verified, login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OtpVerifyResponse"
+              example:
+                message: Login successful
+                user:
+                  id: 5bb7a3d3-54c9-4f4a-9f5f-2ce0c7601c2d
+                  email: user@example.com
+                  tenantId: 3cb2f59c-fb8b-4a6c-8b7a-fd93f4aa8402
+                accessToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                refreshToken: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        "400":
+          description: OTP verify error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                message: Invalid OTP
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+    MessageResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+    UserPublic:
+      type: object
+      required:
+        - id
+        - email
+        - tenantId
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        tenantId:
+          type: string
+          format: uuid
+    UserWithRole:
+      allOf:
+        - $ref: "#/components/schemas/UserPublic"
+        - type: object
+          required:
+            - role
+          properties:
+            role:
+              type: string
+    SignupRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    VerifyEmailRequest:
+      type: object
+      required:
+        - email
+        - code
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+    RefreshTokenRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+    ForgotPasswordRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+    ResetPasswordRequest:
+      type: object
+      required:
+        - email
+        - token
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        token:
+          type: string
+        password:
+          type: string
+          format: password
+    OtpSendRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+    OtpVerifyRequest:
+      type: object
+      required:
+        - email
+        - otp
+      properties:
+        email:
+          type: string
+          format: email
+        otp:
+          type: string
+          pattern: "^[0-9]{6}$"
+    SignupResponse:
+      type: object
+      required:
+        - message
+        - user
+      properties:
+        message:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserPublic"
+    LoginResponse:
+      type: object
+      required:
+        - message
+        - user
+        - accessToken
+        - refreshToken
+      properties:
+        message:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserWithRole"
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+    RefreshTokenResponse:
+      type: object
+      required:
+        - accessToken
+      properties:
+        accessToken:
+          type: string
+    OtpVerifyResponse:
+      type: object
+      required:
+        - message
+        - user
+        - accessToken
+        - refreshToken
+      properties:
+        message:
+          type: string
+        user:
+          $ref: "#/components/schemas/UserPublic"
+        accessToken:
+          type: string
+        refreshToken:
+          type: string

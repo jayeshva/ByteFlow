@@ -1,0 +1,234 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+//////////////////////////////////////////////////////
+// TENANT & USER
+//////////////////////////////////////////////////////
+
+model Tenant {
+  id              String   @id @default(uuid())
+  name            String
+  status          String   @default("active") // active, suspended
+  planId          String?
+
+  // Usage tracking (fast plan enforcement)
+  dmQuotaMonthly  Int      @default(1000)
+  dmSentThisMonth Int      @default(0)
+  dmSentLifetime  Int      @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users           User[]
+  igAccounts      IGAccount[]
+  automations     Automation[]
+  messageLogs     MessageLog[]
+  transactions    TransactionHistory[]
+  plan            Plan?    @relation(fields: [planId], references: [id])
+  subscription    Subscription?
+
+  @@index([status])
+  @@index([planId])
+}
+model User {
+  id               String   @id @default(uuid())
+  name             String
+  tenantId         String
+  email            String   @unique
+  password         String
+  role             String   @default("owner")
+
+  isVerified       Boolean  @default(false)
+  verificationCode String?
+  verificationExpiry DateTime?
+
+  resetToken       String?
+  resetTokenExpiry DateTime?
+
+  otpCode          String?
+  otpExpiry        DateTime?
+
+  createdAt DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+
+//////////////////////////////////////////////////////
+// INSTAGRAM ACCOUNT (connected professional account)
+//////////////////////////////////////////////////////
+
+model IGAccount {
+  id              String   @id @default(uuid())
+  tenantId        String
+
+  // Routing key from webhook payload
+  igUserId        String   @unique
+  igBusinessId    String   @unique
+  igName          String?  
+  igUsername      String?
+
+  // Encrypted token (AES-GCM) + KMS data-key blob
+  tokenCiphertext Bytes
+  tokenKeyBlob    Bytes
+  tokenNonce      Bytes
+  tokenAlg        String   @default("AES-256-GCM")
+  tokenAuthTag    Bytes?
+  tokenExpiresAt  DateTime?
+
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  automations     Automation[]
+
+  @@index([tenantId])
+  @@index([igBusinessId, isActive])
+}
+
+//////////////////////////////////////////////////////
+// AUTOMATIONS & RULES
+//////////////////////////////////////////////////////
+
+model Automation {
+  id            String   @id @default(uuid())
+  tenantId      String
+  igAccountId   String
+
+  automationType String  // "COMMENT" only for now
+  scopeType     String   // POST | ALL_POSTS
+  scopeMediaId  String?  // required when scopeType=POST
+  isEnabled     Boolean  @default(true)
+  isDeleted     Boolean  @default(false)
+
+  // Flow name for display
+  flowName      String?
+
+  // Primary trigger configuration
+  matchType     String   // CONTAINS | EXACT | REGEX | INTENT
+  triggerKeyword String? // keyword for CONTAINS/EXACT/REGEX
+  intentLabel   String?  // for INTENT matching
+
+  // Reply configuration
+  enablePublicReply Boolean @default(false)
+  publicReplyText   String?  // public comment reply
+  privateReplyText  String   // DM private reply (always required)
+  isAutomationTimingEnabled Boolean @default(false)
+  automationStartTime DateTime?
+  automationEndTime DateTime?
+
+
+
+  // Rule behavior
+  priority      Int      @default(100)
+  cooldownSec   Int      @default(3600)
+
+  rules         Json?    @default("[]") // Legacy/backup rules array
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  igAccount     IGAccount @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
+
+
+  @@index([tenantId, isEnabled])
+  @@index([tenantId, scopeType, scopeMediaId])
+  @@index([igAccountId, isEnabled, priority])
+}
+
+
+
+
+//////////////////////////////////////////////////////
+// EVENT / MESSAGE HISTORY
+//////////////////////////////////////////////////////
+
+model MessageLog {
+  id              BigInt   @id @default(autoincrement())
+  tenantId        String
+  igBusinessId    String
+  mediaId         String?
+  commentId       String?
+  senderId        String?
+  senderUsername  String?  // Instagram username for display
+  commentText     String?  // Original comment text
+  matchedRuleId   String?
+  status          String   // SENT | SKIPPED | FAILED
+  errorCode       String?
+  createdAt       DateTime @default(now())
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, mediaId, createdAt])
+}
+
+//////////////////////////////////////////////////////
+// BILLING: PLANS + TRANSACTION HISTORY
+//////////////////////////////////////////////////////
+
+model Plan {
+  id              String   @id @default(uuid())
+  name            String   @unique  // FREE, PRO, ULTRA
+  displayName     String   @default("")
+  priceMonthly    Int      // smallest currency unit (paise)
+  dmLimitMonthly  Int
+  dodoProductId   String?  // Dodo product ID for checkout
+  features        Json?    @default("[]")  // Feature list for UI
+  isActive        Boolean  @default(true)
+  transactions    TransactionHistory[]
+  tenants         Tenant[]
+  subscriptions   Subscription[]
+}
+
+model Subscription {
+  id                  String    @id @default(uuid())
+  tenantId            String    @unique
+  planId              String
+  status              String    @default("active") // active, cancelled, past_due
+  dodoSubscriptionId  String?   @unique  // Dodo Payments subscription ID
+  dodoCustomerId      String?   // Dodo customer ID
+  currentPeriodStart  DateTime?
+  currentPeriodEnd    DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  tenant              Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan                Plan      @relation(fields: [planId], references: [id])
+
+  @@index([status])
+  @@index([dodoSubscriptionId])
+}
+
+model TransactionHistory {
+  id           String   @id @default(uuid())
+  tenantId     String
+  planId       String?
+
+  amount       Int
+  currency     String   @default("INR")
+  status       String   // SUCCESS | FAILED | REFUNDED
+  provider     String   // Dodo | Razorpay | Stripe
+  providerRef  String   // payment_id/subscription_id
+  createdAt    DateTime @default(now())
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan         Plan?    @relation(fields: [planId], references: [id])
+
+  @@index([tenantId, createdAt])
+  @@index([provider, providerRef])
+}
