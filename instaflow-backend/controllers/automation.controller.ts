@@ -19,7 +19,13 @@ export class AutomationController {
         isAutomationTimingEnabled: req.body.isAutomationTimingEnabled || false,
         automationStartTime: req.body.automationStartTime,
         automationEndTime: req.body.automationEndTime,
+        // Require Follow feature
+        requireFollow: req.body.requireFollow || false,
+        followPromptText: req.body.followPromptText,
+        // CTA Buttons
+        ctaButtons: req.body.ctaButtons || [],
       };
+
 
       // Validate POST scope
       if (createReq.scopeType === "POST" && !createReq.scopeMediaId) {

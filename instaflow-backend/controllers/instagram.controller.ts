@@ -17,7 +17,7 @@ export class InstagramController {
     try {
       const { code, state } = req.query;
       const tenantId = state as string;
-      // console.log("OAuth Callback received. Code:", code, "State:", state);
+      console.log("OAuth Callback received. Code:", code, "State:", state);
 
       const short = await InstagramService.exchangeCodeForToken(code as string);
       const long = await InstagramService.getLongLivedToken(short.access_token);

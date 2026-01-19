@@ -8,9 +8,11 @@ import authRoutes from "./routes/auth.routes";
 import instaRoutes from "./routes/instagram.routes";
 import automateRoutes from "./routes/automation.routes";
 import subscriptionRoutes from "./routes/subscription.routes";
+import analyticsRoutes from "./routes/analytics.routes";
 import { prisma } from "./prisma";
 import "./workers";
 import { registerBullMQUI } from "./bullmq";
+
 
 const swaggerUi = require("swagger-ui-express");
 
@@ -44,7 +46,9 @@ app.use("/auth", authRoutes);
 app.use ("/instagram", instaRoutes);
 app.use("/automate", automateRoutes);
 app.use("/subscription", subscriptionRoutes);
+app.use("/api", analyticsRoutes);  // Analytics and click tracking
 const openapiPath = path.join(process.cwd(), "docs", "openapi.yaml");
+
 
 app.get("/docs/openapi.yaml", (req, res) => {
   res.sendFile(openapiPath);

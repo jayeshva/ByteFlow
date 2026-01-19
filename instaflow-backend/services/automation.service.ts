@@ -19,14 +19,21 @@ function mapPayloadToDbFields(data: any) {
   // Handle both frontend and direct DB field names
   // triggerKeyword - can come as 'keyword' or 'triggerKeyword'
   if (data.triggerKeyword !== undefined) mapped.triggerKeyword = data.triggerKeyword;
+  // triggerKeywords - array of keywords for multi-keyword support
+  if (data.triggerKeywords !== undefined) mapped.triggerKeywords = data.triggerKeywords;
   
   // enablePublicReply - can come as 'isPublicReplyEnabled' or 'enablePublicReply'
+
   if (data.enablePublicReply !== undefined) mapped.enablePublicReply = data.enablePublicReply;
   
   // publicReplyText - can come as 'publicReply' or 'publicReplyText'
   if (data.publicReplyText !== undefined) mapped.publicReplyText = data.publicReplyText;
   
+  // publicReplies - array of strings for randomized public replies
+  if (data.publicReplies !== undefined) mapped.publicReplies = data.publicReplies;
+  
   // isEnabled
+
   if (data.isEnabled !== undefined) mapped.isEnabled = data.isEnabled;
   
 
@@ -35,8 +42,16 @@ function mapPayloadToDbFields(data: any) {
   if (data.automationStartTime !== undefined) mapped.automationStartTime = data.automationStartTime;
   if (data.automationEndTime !== undefined) mapped.automationEndTime = data.automationEndTime;
   
+  // Require follow feature
+  if (data.requireFollow !== undefined) mapped.requireFollow = data.requireFollow;
+  if (data.followPromptText !== undefined) mapped.followPromptText = data.followPromptText;
+  
+  // CTA Buttons for DM
+  if (data.ctaButtons !== undefined) mapped.ctaButtons = data.ctaButtons;
+  
   return mapped;
 }
+
 
 
 export class AutomationService {

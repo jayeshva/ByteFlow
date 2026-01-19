@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../prisma';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { DodoService } from '../services/dodo.service';
+import { CashfreeService } from '../services/cashfree.service';
+
 
 const router = Router();
 
@@ -96,12 +98,14 @@ router.get('/current', authMiddleware, async (req: Request, res: Response) => {
 
 /**
  * POST /subscription/checkout
- * Create Dodo checkout session for plan upgrade
+ * Create checkout session for plan upgrade
+ * Query params: provider=dodo|cashfree (default: dodo)
  */
 router.post('/checkout', authMiddleware, async (req: Request, res: Response) => {
   try {
     const tenantId = (req as any).user.tenantId;
     const { planId } = req.body;
+    const provider = (req.query.provider as string) || 'dodo';
 
     if (!planId) {
       return res.status(400).json({ error: 'planId is required' });
@@ -112,8 +116,8 @@ router.post('/checkout', authMiddleware, async (req: Request, res: Response) => 
       where: { id: planId },
     });
 
-    if (!plan || !plan.dodoProductId) {
-      return res.status(400).json({ error: 'Invalid plan or plan not available for purchase' });
+    if (!plan) {
+      return res.status(400).json({ error: 'Invalid plan' });
     }
 
     // Get tenant and user info
@@ -131,13 +135,39 @@ router.post('/checkout', authMiddleware, async (req: Request, res: Response) => 
 
     const ownerEmail = tenant.users[0]?.email || 'customer@example.com';
     const ownerName = tenant.users[0]?.name || tenant.name;
-
-    // Create checkout session with Dodo
+    const ownerPhone = (tenant.users[0] as any)?.phone || '9999999999';
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+    // Use Cashfree if provider=cashfree
+    if (provider === 'cashfree') {
+      const checkout = await CashfreeService.createSubscriptionCheckout({
+        planId: plan.id,
+        tenantId: tenantId,
+        customerEmail: ownerEmail,
+        customerPhone: ownerPhone,
+        customerName: ownerName,
+        amount: plan.priceMonthly * 100, // Convert to paise
+        successUrl: `${frontendUrl}/subscription/success?plan=${plan.name}&provider=cashfree`,
+        cancelUrl: `${frontendUrl}/subscription/cancel`,
+      });
+
+      return res.json({
+        paymentLink: checkout.paymentLink,
+        planName: plan.displayName,
+        provider: 'cashfree',
+        orderId: checkout.orderId,
+      });
+    }
+
+    // Default: Use Dodo
+    if (!plan.dodoProductId) {
+      return res.status(400).json({ error: 'Plan not available for Dodo checkout' });
+    }
+
     const checkout = await DodoService.createSubscriptionCheckout({
       planId: plan.id,
       dodoProductId: plan.dodoProductId,
-      tenantId: tenantId,  // Passed to metadata for webhook processing
+      tenantId: tenantId,
       customerId: tenant.subscription?.dodoCustomerId || undefined,
       customerEmail: ownerEmail,
       customerName: ownerName,
@@ -148,12 +178,14 @@ router.post('/checkout', authMiddleware, async (req: Request, res: Response) => 
     res.json({
       paymentLink: checkout.paymentLink,
       planName: plan.displayName,
+      provider: 'dodo',
     });
   } catch (error) {
     console.error('Failed to create checkout:', error);
     res.status(500).json({ error: 'Failed to create checkout session' });
   }
 });
+
 
 /**
  * POST /subscription/webhook
@@ -210,8 +242,56 @@ router.post('/webhook', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /subscription/cashfree-webhook
+ * Handle Cashfree webhook events
+ */
+router.post('/cashfree-webhook', async (req: Request, res: Response) => {
+  try {
+    const signature = req.headers['x-cashfree-signature'] as string || '';
+    const timestamp = req.headers['x-cashfree-timestamp'] as string || '';
+    const rawBody = JSON.stringify(req.body);
+
+    console.log('Cashfree webhook received, signature:', signature ? 'present' : 'missing');
+    console.log('Cashfree webhook timestamp:', timestamp);
+    console.log('Cashfree webhook raw body:', rawBody);
+
+    // Verify signature if webhook secret is configured
+    const webhookSecret = process.env.CASHFREE_WEBHOOK_SECRET;
+    if (webhookSecret && !CashfreeService.verifyWebhookSignature(rawBody, timestamp, signature)) {
+      console.warn('Invalid Cashfree webhook signature');
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    const event = req.body;
+    const eventType = event.type || event.event || 'unknown';
+    console.log('Cashfree webhook event type:', eventType);
+
+    // Handle different event types
+    switch (eventType) {
+      case 'PAYMENT_SUCCESS':
+      case 'ORDER_PAID':
+        await handleCashfreePaymentSuccess(event.data || event);
+        break;
+      case 'SUBSCRIPTION_ACTIVE':
+        await handleCashfreeSubscriptionActive(event.data || event);
+        break;
+      case 'SUBSCRIPTION_CANCELLED':
+        await handleCashfreeSubscriptionCancelled(event.data || event);
+        break;
+      default:
+        console.log('Unhandled Cashfree webhook event:', eventType);
+    }
+
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Cashfree webhook error:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
+/**
  * POST /subscription/cancel
- * Cancel current subscription
+ * Cancel current subscription (supports both Dodo and Cashfree)
  */
 router.post('/cancel', authMiddleware, async (req: Request, res: Response) => {
   try {
@@ -225,10 +305,16 @@ router.post('/cancel', authMiddleware, async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'No active subscription found' });
     }
 
-    if (subscription.dodoSubscriptionId) {
+    // Cancel with the appropriate provider
+    if (subscription.paymentProvider === 'cashfree' && subscription.cashfreeSubscriptionId) {
+      const cancelled = await CashfreeService.cancelSubscription(subscription.cashfreeSubscriptionId);
+      if (!cancelled) {
+        return res.status(500).json({ error: 'Failed to cancel subscription with Cashfree' });
+      }
+    } else if (subscription.dodoSubscriptionId) {
       const cancelled = await DodoService.cancelSubscription(subscription.dodoSubscriptionId);
       if (!cancelled) {
-        return res.status(500).json({ error: 'Failed to cancel subscription with payment provider' });
+        return res.status(500).json({ error: 'Failed to cancel subscription with Dodo' });
       }
     }
 
@@ -244,6 +330,7 @@ router.post('/cancel', authMiddleware, async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Failed to cancel subscription' });
   }
 });
+
 
 /**
  * GET /subscription/portal
@@ -408,6 +495,135 @@ async function handleSubscriptionPastDue(data: any) {
     where: { dodoSubscriptionId: subscription_id },
     data: { status: 'past_due' },
   });
+}
+
+// Cashfree webhook handlers
+
+async function handleCashfreePaymentSuccess(data: any) {
+  const { order, customer_details, order_tags } = data;
+  const orderId = order?.order_id || data.order_id;
+  const tenantId = order_tags?.tenantId || data.tenantId;
+  const planId = order_tags?.planId || data.planId;
+
+  if (!tenantId) {
+    console.error('No tenantId in Cashfree payment data');
+    return;
+  }
+
+  // Find the plan
+  const plan = await prisma.plan.findUnique({
+    where: { id: planId },
+  });
+
+  if (!plan) {
+    console.error('Plan not found for Cashfree payment:', planId);
+    return;
+  }
+
+  // Create or update subscription
+  await prisma.subscription.upsert({
+    where: { tenantId },
+    create: {
+      tenantId,
+      planId: plan.id,
+      status: 'active',
+      paymentProvider: 'cashfree',
+      cashfreeSubscriptionId: orderId,
+      cashfreeCustomerId: customer_details?.customer_id,
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+    update: {
+      planId: plan.id,
+      status: 'active',
+      paymentProvider: 'cashfree',
+      cashfreeSubscriptionId: orderId,
+      cashfreeCustomerId: customer_details?.customer_id,
+      currentPeriodStart: new Date(),
+      currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+
+  // Update tenant's DM quota
+  await prisma.tenant.update({
+    where: { id: tenantId },
+    data: {
+      planId: plan.id,
+      dmQuotaMonthly: plan.dmLimitMonthly,
+      dmSentThisMonth: 0,
+    },
+  });
+
+  // Log transaction
+  await prisma.transactionHistory.create({
+    data: {
+      tenantId,
+      planId: plan.id,
+      amount: plan.priceMonthly,
+      currency: 'INR',
+      status: 'SUCCESS',
+      provider: 'Cashfree',
+      providerRef: orderId,
+    },
+  });
+
+  console.log('Cashfree subscription activated for tenant:', tenantId);
+}
+
+async function handleCashfreeSubscriptionActive(data: any) {
+  const subscriptionId = data.subReferenceId || data.subscription_id;
+  
+  const subscription = await prisma.subscription.findUnique({
+    where: { cashfreeSubscriptionId: subscriptionId },
+  });
+
+  if (subscription) {
+    await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        status: 'active',
+        currentPeriodStart: new Date(),
+        currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    // Reset monthly DM count
+    await prisma.tenant.update({
+      where: { id: subscription.tenantId },
+      data: { dmSentThisMonth: 0 },
+    });
+  }
+}
+
+async function handleCashfreeSubscriptionCancelled(data: any) {
+  const subscriptionId = data.subReferenceId || data.subscription_id;
+
+  const subscription = await prisma.subscription.findUnique({
+    where: { cashfreeSubscriptionId: subscriptionId },
+    include: { tenant: true },
+  });
+
+  if (subscription) {
+    await prisma.subscription.update({
+      where: { id: subscription.id },
+      data: { status: 'cancelled' },
+    });
+
+    // Downgrade to Free plan
+    const freePlan = await prisma.plan.findFirst({
+      where: { name: 'FREE' },
+    });
+
+    if (freePlan) {
+      await prisma.tenant.update({
+        where: { id: subscription.tenantId },
+        data: {
+          planId: freePlan.id,
+          dmQuotaMonthly: freePlan.dmLimitMonthly,
+        },
+      });
+    }
+  }
 }
 
 export default router;

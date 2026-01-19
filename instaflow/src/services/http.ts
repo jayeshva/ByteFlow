@@ -66,6 +66,8 @@ export const setAuthTokens = (accessToken?: string, refreshToken?: string) => {
 export const clearAuthTokens = () => {
   removeStorageItem(ACCESS_TOKEN_KEY);
   removeStorageItem(REFRESH_TOKEN_KEY);
+  removeStorageItem("isLoggedIn");
+  removeStorageItem("isIGConnected");
 };
 
 const createRequestId = () => {
@@ -119,9 +121,16 @@ export const getApiBaseUrl = () => API_BASE_URL;
 
 let refreshPromise: Promise<string | null> | null = null;
 
-const refreshAccessToken = async () => {
+const refreshAccessToken = async (): Promise<string | null> => {
   const refreshToken = getRefreshToken();
-  if (!refreshToken) return null;
+  
+  console.log("🔄 [Token Refresh] Starting refresh...");
+  console.log("🔄 [Token Refresh] Refresh token present:", !!refreshToken);
+  
+  if (!refreshToken) {
+    console.log("❌ [Token Refresh] No refresh token found in storage");
+    return null;
+  }
 
   if (!refreshPromise) {
     refreshPromise = refreshClient
@@ -130,12 +139,21 @@ const refreshAccessToken = async () => {
         { refreshToken },
         { headers: { "X-Request-Id": createRequestId() } }
       )
-      .then((response) => response.data?.accessToken as string | undefined)
-      .then((accessToken) => {
-        if (accessToken) setAuthTokens(accessToken);
+      .then((response) => {
+        console.log("✅ [Token Refresh] Response received:", response.status);
+        const accessToken = response.data?.accessToken as string | undefined;
+        if (accessToken) {
+          console.log("✅ [Token Refresh] New access token obtained");
+          setAuthTokens(accessToken);
+        } else {
+          console.log("❌ [Token Refresh] No accessToken in response data");
+        }
         return accessToken ?? null;
       })
-      .catch(() => null)
+      .catch((error) => {
+        console.error("❌ [Token Refresh] Failed:", error?.response?.data || error?.message);
+        return null;
+      })
       .finally(() => {
         refreshPromise = null;
       });
@@ -152,6 +170,7 @@ apiClient.interceptors.request.use((config) => {
   };
 
   const token = getAccessToken();
+  // console.log("[HTTP] Request to:", config.url, "| Token present:", !!token);
   if (token && !config.headers.Authorization) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -168,22 +187,34 @@ apiClient.interceptors.response.use(
         })
       | undefined;
 
+    console.log("🔴 [Interceptor] Error:", error.response?.status, originalRequest?.url);
+
     if (
       error.response?.status === 401 &&
       originalRequest &&
       !originalRequest._retry &&
-      !originalRequest.url?.includes("/auth/refresh")
+      !originalRequest.url?.includes("/auth/refresh") &&
+      !originalRequest.url?.includes("/auth/login")
     ) {
       originalRequest._retry = true;
+      console.log("🔄 [Interceptor] 401 detected, attempting token refresh...");
+      
       const newAccessToken = await refreshAccessToken();
+      
       if (newAccessToken) {
+        console.log("✅ [Interceptor] Token refreshed, retrying original request...");
         originalRequest.headers = {
           ...originalRequest.headers,
           Authorization: `Bearer ${newAccessToken}`,
         };
         return apiClient(originalRequest);
       }
+      
+      // Only clear tokens and redirect if refresh truly failed
+      console.log("❌ [Interceptor] Token refresh failed, clearing tokens and redirecting...");
       clearAuthTokens();
+      window.location.href = "/login";
+      return Promise.reject(normalizeApiError(error));
     }
 
     return Promise.reject(normalizeApiError(error));

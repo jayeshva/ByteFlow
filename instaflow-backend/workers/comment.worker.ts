@@ -17,7 +17,7 @@ function randomDelay(): Promise<void> {
 // Helper: Check if automation timing is active
 function isWithinTimingWindow(automation: any): boolean {
   if (!automation.isAutomationTimingEnabled) return true;
-  
+
   const now = new Date();
   if (automation.automationStartTime && new Date(automation.automationStartTime) > now) return false;
   if (automation.automationEndTime && new Date(automation.automationEndTime) < now) return false;
@@ -28,12 +28,58 @@ const commentWorker = new Worker(
   "comment_events",
   async job => {
     const event = job.data;
-    
+
+    // Check if this is a follow confirm event (user clicked "I Followed" button)
+    if (event.isFollowConfirm) {
+      console.log("📥 Processing follow confirm event:", {
+        automationId: event.automationId,
+        senderId: event.senderId
+      });
+
+      // Find the automation
+      const automation = await prisma.automation.findUnique({
+        where: { id: event.automationId }
+      });
+
+      if (!automation) {
+        console.log("⚠️ Automation not found:", event.automationId);
+        return;
+      }
+
+      // Find the IG account
+      const igAccount = await prisma.iGAccount.findFirst({
+        where: { id: automation.igAccountId, isActive: true }
+      });
+
+      if (!igAccount) {
+        console.log("⚠️ IG account not found for automation");
+        return;
+      }
+
+      // Trigger automation without requireFollow check (user already confirmed)
+      console.log("✅ User confirmed follow. Sending value message...");
+      await triggerAutomationForFollowConfirm(automation, igAccount, event.senderId, automation.tenantId);
+
+      // Update log status
+      await prisma.messageLog.updateMany({
+        where: {
+          senderId: event.senderId,
+          matchedRuleId: event.automationId,
+          status: "PENDING_FOLLOW"
+        },
+        data: { status: "SENT" }
+      });
+
+      return;
+    }
+
+    // --- Regular comment event processing ---
+
     // Use username as fallback for senderId (senderId should be IGSID from webhook 'from.id')
     const senderId = event.senderId || event.from?.id || event.username;
-    
-    console.log("📥 Processing comment event:", { 
-      mediaId: event.mediaId, 
+
+    console.log("📥 Processing comment event:", {
+      mediaId: event.mediaId,
       text: event.text?.substring(0, 50),
       username: event.username,
       senderId,
@@ -78,6 +124,7 @@ const commentWorker = new Worker(
       return;
     }
 
+
     // 2.5) Check subscription quota (monthly DM limit based on plan)
     const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
@@ -115,7 +162,7 @@ const commentWorker = new Worker(
       igAccountId: igAccount.id,
       mediaId: event.mediaId
     });
-    
+
     const automations = await prisma.automation.findMany({
       where: {
         tenantId,
@@ -190,8 +237,16 @@ const commentWorker = new Worker(
         }
       });
 
+      // Increment execution count for analytics
+      await prisma.automation.update({
+        where: { id: automation.id },
+        data: { executionCount: { increment: 1 } }
+      });
+      console.log("📈 Execution count incremented for automation:", automation.flowName || automation.id);
+
       // Stop after first match
       return;
+
     }
 
     console.log("ℹ️ No automation matched this comment");
@@ -202,14 +257,33 @@ const commentWorker = new Worker(
 async function doesAutomationMatch(automation: any, event: any): Promise<boolean> {
   const text = (event.text || "").toLowerCase().trim();
 
-  switch (automation.matchType) {
-    case "CONTAINS":
-      if (!automation.triggerKeyword) return false;
-      return text.includes(automation.triggerKeyword.toLowerCase());
+  // Helper: Get keywords as array (supports both new triggerKeywords array and legacy triggerKeyword string)
+  const getKeywords = (): string[] => {
+    // Check new triggerKeywords array first
+    if (automation.triggerKeywords && Array.isArray(automation.triggerKeywords) && automation.triggerKeywords.length > 0) {
+      return automation.triggerKeywords.map((k: string) => k.toLowerCase());
+    }
+    // Fall back to legacy triggerKeyword (comma-separated string)
+    if (automation.triggerKeyword) {
+      return automation.triggerKeyword.split(',').map((k: string) => k.trim().toLowerCase()).filter(Boolean);
+    }
+    return [];
+  };
 
-    case "EXACT":
-      if (!automation.triggerKeyword) return false;
-      return text === automation.triggerKeyword.toLowerCase();
+  switch (automation.matchType) {
+    case "CONTAINS": {
+      const keywords = getKeywords();
+      if (keywords.length === 0) return false;
+      // Match if ANY keyword is contained in the text
+      return keywords.some(keyword => text.includes(keyword));
+    }
+
+    case "EXACT": {
+      const keywords = getKeywords();
+      if (keywords.length === 0) return false;
+      // Match if text EXACTLY matches ANY keyword
+      return keywords.some(keyword => text === keyword);
+    }
 
     case "REGEX":
       if (!automation.triggerKeyword) return false;
@@ -232,12 +306,13 @@ async function doesAutomationMatch(automation: any, event: any): Promise<boolean
   }
 }
 
+
 async function isInCooldown(automation: any, tenantId: string, senderId: string): Promise<boolean> {
   const cooldownSec = automation.cooldownSec || 3600; // Default 1 hour
-  
+
   const lastExec = await prisma.messageLog.findFirst({
-    where: { 
-      matchedRuleId: automation.id, 
+    where: {
+      matchedRuleId: automation.id,
       senderId,
       status: "SENT"
     },
@@ -253,22 +328,121 @@ async function isInCooldown(automation: any, tenantId: string, senderId: string)
 async function triggerAutomation(automation: any, igAccount: any, event: any, senderId: string, tenantId: string) {
   const token = decryptToken(igAccount);
 
-  // 1) Send public reply first (if enabled)
-  if (automation.enablePublicReply && automation.publicReplyText) {
+  // Require Follow feature - Trust-based (no API verification)
+  // User clicks "I Followed" button to proceed, we trust their click
+  if (automation.requireFollow) {
+    console.log(`👤 Require Follow enabled. Sending follow prompt to ${senderId}...`);
+
+    const promptText = automation.followPromptText || "Follow us to receive exclusive content! 🎁";
+
     try {
-      console.log("💬 Sending public reply...");
+      // Use Button Template with postback button
       await axios.post(
-        `https://graph.instagram.com/v24.0/${event.commentId}/replies`,
+        `https://graph.instagram.com/v24.0/${igAccount.igUserId}/messages`,
         {
-          message: automation.publicReplyText,
+          recipient: { comment_id: event.commentId },
+          message: {
+            attachment: {
+              type: "template",
+              payload: {
+                template_type: "button",
+                text: promptText,
+                buttons: [
+                  {
+                    type: "postback",
+                    title: "✅ I Followed!",
+                    payload: `FOLLOW_CHECK:${automation.id}`
+                  }
+                ]
+              }
+            }
+          },
           access_token: token
         }
       );
-      console.log("✅ Public reply sent");
+
+      console.log("automation_public_reply", automation.enablePublicReply);
+
+      // send public reply if enabled
+      if (automation.enablePublicReply) {
+        let replyText = automation.publicReplyText;
+
+        // Choose randomly from multiple replies if available
+        if (automation.publicReplies && Array.isArray(automation.publicReplies) && automation.publicReplies.length > 0) {
+          const replies = automation.publicReplies;
+          const randomIndex = Math.floor(Math.random() * replies.length);
+          replyText = replies[randomIndex];
+        }
+
+        if (replyText) {
+          try {
+            console.log(`💬 Sending public reply: "${replyText}"`);
+            await axios.post(
+              `https://graph.instagram.com/v24.0/${event.commentId}/replies`,
+              {
+                message: replyText,
+                access_token: token
+              }
+            );
+            console.log("✅ Public reply sent");
+          } catch (err: any) {
+            console.error("❌ Public reply failed:", err.response?.data || err.message);
+          }
+        }
+      }
+      console.log("✅ Follow prompt sent with Button Template");
+
+      // Log as pending follow
+      await prisma.messageLog.create({
+        data: {
+          tenantId,
+          igBusinessId: igAccount.igBusinessId,
+          mediaId: event.mediaId,
+          commentId: event.commentId,
+          senderId: senderId,
+          senderUsername: event.username || null,
+          commentText: event.text || null,
+          matchedRuleId: automation.id,
+          status: "PENDING_FOLLOW",
+          errorCode: null
+        }
+      });
     } catch (err: any) {
-      console.error("❌ Public reply failed:", err.response?.data || err.message);
+      console.error("❌ Follow prompt failed:", err.response?.data || err.message);
+    }
+
+    return; // Don't send value message yet - wait for button click
+  }
+
+
+  // 1) Send public reply first (if enabled)
+  if (automation.enablePublicReply) {
+    let replyText = automation.publicReplyText;
+
+    // Choose randomly from multiple replies if available
+    if (automation.publicReplies && Array.isArray(automation.publicReplies) && automation.publicReplies.length > 0) {
+      const replies = automation.publicReplies;
+      const randomIndex = Math.floor(Math.random() * replies.length);
+      replyText = replies[randomIndex];
+    }
+
+    if (replyText) {
+      try {
+        console.log(`💬 Sending public reply: "${replyText}"`);
+        await axios.post(
+          `https://graph.instagram.com/v24.0/${event.commentId}/replies`,
+          {
+            message: replyText,
+            access_token: token
+          }
+        );
+        console.log("✅ Public reply sent");
+      } catch (err: any) {
+        console.error("❌ Public reply failed:", err.response?.data || err.message);
+      }
     }
   }
+
 
   // console.log("igAccount", igAccount);
 
@@ -279,15 +453,72 @@ async function triggerAutomation(automation: any, igAccount: any, event: any, se
   if (automation.privateReplyText) {
     try {
       console.log("📩 Sending DM to:", senderId, igAccount.igUserId);
-      await axios.post(
-        `https://graph.instagram.com/v24.0/${igAccount.igUserId}/messages`,
-        {
+
+      // Check if we have CTA buttons to include
+      const validButtons = (automation.ctaButtons || [])
+        .filter((btn: any) => btn.label && btn.url)
+        .slice(0, 3); // Instagram limit: 3 buttons per template
+
+      if (validButtons.length > 0) {
+        // Use Button Template: text + clickable buttons in one message
+        // Button Template supports up to 640 characters for text
+        const buttonTemplatePayload = {
           recipient: { comment_id: event.commentId },
-          message: { text: automation.privateReplyText },
+          message: {
+            attachment: {
+              type: "template",
+              payload: {
+                template_type: "button",
+                text: automation.privateReplyText, // 640 char limit
+                buttons: validButtons.map((btn: any) => ({
+                  type: "web_url",
+                  url: btn.url,
+                  title: btn.label.substring(0, 20) // 20 char limit for button title
+                }))
+              }
+            }
+          },
           access_token: token
+        };
+
+        try {
+          await axios.post(
+            `https://graph.instagram.com/v24.0/${igAccount.igUserId}/messages`,
+            buttonTemplatePayload
+          );
+          console.log("✅ DM sent with clickable buttons (Button Template)");
+        } catch (templateErr: any) {
+          // Fallback: send text with buttons appended as links
+          console.log("⚠️ Button template failed, falling back to text links:", templateErr.response?.data?.error?.message || templateErr.message);
+
+          const ctaSection = validButtons
+            .map((btn: any) => `🔗 ${btn.label}\n${btn.url}`)
+            .join('\n\n');
+
+          const fullMessage = `${automation.privateReplyText}\n\n━━━━━━━━━━━━━━\n${ctaSection}`;
+
+          await axios.post(
+            `https://graph.instagram.com/v24.0/${igAccount.igUserId}/messages`,
+            {
+              recipient: { comment_id: event.commentId },
+              message: { text: fullMessage },
+              access_token: token
+            }
+          );
+          console.log("✅ Fallback DM sent with text links");
         }
-      );
-      console.log("✅ DM sent successfully");
+      } else {
+        // No buttons - send plain text message
+        await axios.post(
+          `https://graph.instagram.com/v24.0/${igAccount.igUserId}/messages`,
+          {
+            recipient: { comment_id: event.commentId },
+            message: { text: automation.privateReplyText },
+            access_token: token
+          }
+        );
+        console.log("✅ Text DM sent successfully");
+      }
 
       // Increment DM count after successful send
       await prisma.tenant.update({
@@ -301,6 +532,114 @@ async function triggerAutomation(automation: any, igAccount: any, event: any, se
     } catch (err: any) {
       console.error("❌ DM failed:", err.response?.data || err.message);
       throw err; // Re-throw to mark as failed
+    }
+  }
+}
+
+
+
+
+
+
+
+// Trigger automation for follow confirm (sends value message directly to user)
+async function triggerAutomationForFollowConfirm(automation: any, igAccount: any, senderId: string, tenantId: string) {
+  const token = decryptToken(igAccount);
+
+  // Add random delay for anti-spam
+  console.log("⏱️ Adding random delay for anti-spam...");
+  await randomDelay();
+
+  // Send private DM with CTA buttons
+  if (automation.privateReplyText) {
+    try {
+      console.log("📩 Sending value message to:", senderId);
+
+      // Check if we have CTA buttons to include
+      const validButtons = (automation.ctaButtons || [])
+        .filter((btn: any) => btn.label && btn.url)
+        .slice(0, 3);
+
+      if (validButtons.length > 0) {
+        // Use Button Template: text + clickable buttons
+        const buttonTemplatePayload = {
+          recipient: { id: senderId }, // Use recipient.id for follow confirm (not comment_id)
+          message: {
+            attachment: {
+              type: "template",
+              payload: {
+                template_type: "button",
+                text: automation.privateReplyText,
+                buttons: validButtons.map((btn: any) => ({
+                  type: "web_url",
+                  url: btn.url,
+                  title: btn.label.substring(0, 20)
+                }))
+              }
+            }
+          },
+          access_token: token
+        };
+
+        try {
+          await axios.post(
+            `https://graph.instagram.com/v24.0/${igAccount.igUserId}/messages`,
+            buttonTemplatePayload
+          );
+          console.log("✅ Value message sent with clickable buttons (Button Template)");
+        } catch (templateErr: any) {
+          // Fallback: send text with buttons as links
+          console.log("⚠️ Button template failed, falling back to text links:", templateErr.response?.data?.error?.message || templateErr.message);
+
+          const ctaSection = validButtons
+            .map((btn: any) => `🔗 ${btn.label}\n${btn.url}`)
+            .join('\n\n');
+
+          const fullMessage = `${automation.privateReplyText}\n\n━━━━━━━━━━━━━━\n${ctaSection}`;
+
+          await axios.post(
+            `https://graph.instagram.com/v24.0/${igAccount.igUserId}/messages`,
+            {
+              recipient: { id: senderId },
+              message: { text: fullMessage },
+              access_token: token
+            }
+          );
+          console.log("✅ Fallback value message sent with text links");
+        }
+      } else {
+        // No buttons - send plain text message
+        await axios.post(
+          `https://graph.instagram.com/v24.0/${igAccount.igUserId}/messages`,
+          {
+            recipient: { id: senderId },
+            message: { text: automation.privateReplyText },
+            access_token: token
+          }
+        );
+        console.log("✅ Value message sent successfully");
+      }
+
+      // Increment DM count
+      await prisma.tenant.update({
+        where: { id: tenantId },
+        data: {
+          dmSentThisMonth: { increment: 1 },
+          dmSentLifetime: { increment: 1 },
+        },
+      });
+      console.log("📊 DM count incremented for tenant:", tenantId);
+
+      // Increment execution count
+      await prisma.automation.update({
+        where: { id: automation.id },
+        data: { executionCount: { increment: 1 } }
+      });
+      console.log("📈 Execution count incremented for automation:", automation.flowName || automation.id);
+
+    } catch (err: any) {
+      console.error("❌ Value message failed:", err.response?.data || err.message);
+      throw err;
     }
   }
 }
@@ -319,6 +658,7 @@ async function detectIntent(text: string): Promise<string> {
   }
   return "general";
 }
+
 
 commentWorker.on("completed", job => {
   console.log(`✅ Job ${job.id} completed`);

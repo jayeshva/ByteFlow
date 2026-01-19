@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { commentQueue } from "../queues/comment.queue";
+import { MessageWebhookController } from "./message.webhook";
 
 export class InstagramWebhookController {
   static async handleWebhook(req: Request, res: Response) {
@@ -10,16 +11,23 @@ export class InstagramWebhookController {
       if (!body.entry) return res.sendStatus(200);
 
       for (const entry of body.entry) {
+        // Handle comment events
         const changes = entry.changes || [];
-
         for (const change of changes) {
           if (change.field === "comments") {
             const value = change.value;
 
+            // Skip replies to comments - only process direct/top-level comments
+            // Instagram includes parent_id when comment is a reply
+            if (value.parent_id) {
+              console.log("ℹ️ Skipping reply comment (parent_id:", value.parent_id, ")");
+              continue;
+            }
+
             // Extract sender's IGSID (Instagram-scoped ID) for DM sending
             // The 'from' object contains: { id: IGSID, username: string }
             const eventData = {
-              tenantId: entry.id,      
+              tenantId: entry.id,
               mediaId: value.media.id,
               commentId: value.id,
               text: value.text,
@@ -30,6 +38,37 @@ export class InstagramWebhookController {
 
             await commentQueue.add("comment_events", eventData);
             console.log("Enqueued comment event:", eventData);
+          }
+        }
+
+
+        // Handle messaging events (Quick Reply and Postback button clicks)
+        const messaging = entry.messaging || [];
+        for (const event of messaging) {
+          // Handle Quick Reply clicks
+          if (event.message?.quick_reply) {
+            const payload = event.message.quick_reply.payload;
+            const senderId = event.sender?.id;
+
+            console.log("📩 Quick Reply received:", { payload, senderId });
+
+            // Handle FOLLOW_CHECK payload
+            if (payload?.startsWith("FOLLOW_CHECK:")) {
+              await MessageWebhookController.handleFollowCheck(payload, senderId, entry.id);
+            }
+          }
+
+          // Handle Postback button clicks (Button Template)
+          if (event.postback) {
+            const payload = event.postback.payload;
+            const senderId = event.sender?.id;
+
+            console.log("📩 Postback button clicked:", { payload, senderId });
+
+            // Handle FOLLOW_CHECK payload
+            if (payload?.startsWith("FOLLOW_CHECK:")) {
+              await MessageWebhookController.handleFollowCheck(payload, senderId, entry.id);
+            }
           }
         }
       }

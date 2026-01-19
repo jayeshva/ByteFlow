@@ -119,18 +119,30 @@ model Automation {
 
   // Primary trigger configuration
   matchType     String   // CONTAINS | EXACT | REGEX | INTENT
-  triggerKeyword String? // keyword for CONTAINS/EXACT/REGEX
+  triggerKeyword String? // keyword for CONTAINS/EXACT/REGEX (backward compat)
+  triggerKeywords Json?  @default("[]") // Array of keywords for multi-keyword support
   intentLabel   String?  // for INTENT matching
+
 
   // Reply configuration
   enablePublicReply Boolean @default(false)
-  publicReplyText   String?  // public comment reply
+  publicReplyText   String?  // public comment reply (legacy)
+  publicReplies     Json?    @default("[]") // Array of strings for randomized public replies
   privateReplyText  String   // DM private reply (always required)
+
   isAutomationTimingEnabled Boolean @default(false)
   automationStartTime DateTime?
   automationEndTime DateTime?
 
+  // Require follow feature
+  requireFollow     Boolean @default(false)  // Only send DM if user follows
+  followPromptText  String?  // Custom prompt message (default handled in code)
 
+  // CTA Buttons for DM (JSON array: [{id, label, url}])
+  ctaButtons        Json?    @default("[]")
+
+  // Analytics
+  executionCount    Int      @default(0)
 
   // Rule behavior
   priority      Int      @default(100)
@@ -143,12 +155,30 @@ model Automation {
 
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   igAccount     IGAccount @relation(fields: [igAccountId], references: [id], onDelete: Cascade)
-
+  clickEvents   ClickEvent[]
 
   @@index([tenantId, isEnabled])
   @@index([tenantId, scopeType, scopeMediaId])
   @@index([igAccountId, isEnabled, priority])
 }
+
+// Click tracking for CTA buttons
+model ClickEvent {
+  id            String   @id @default(uuid())
+  automationId  String
+  buttonId      String   // Which CTA button was clicked
+  tenantId      String
+  clickedAt     DateTime @default(now())
+  userAgent     String?
+  referer       String?
+  ipHash        String?  // Hashed IP for uniqueness, not raw IP
+
+  automation    Automation @relation(fields: [automationId], references: [id], onDelete: Cascade)
+
+  @@index([automationId, clickedAt])
+  @@index([tenantId, clickedAt])
+}
+
 
 
 
@@ -200,8 +230,11 @@ model Subscription {
   tenantId            String    @unique
   planId              String
   status              String    @default("active") // active, cancelled, past_due
+  paymentProvider     String    @default("dodo") // dodo | cashfree
   dodoSubscriptionId  String?   @unique  // Dodo Payments subscription ID
   dodoCustomerId      String?   // Dodo customer ID
+  cashfreeSubscriptionId String? @unique // Cashfree subscription ID
+  cashfreeCustomerId     String? // Cashfree customer ID
   currentPeriodStart  DateTime?
   currentPeriodEnd    DateTime?
   createdAt           DateTime  @default(now())
@@ -212,7 +245,9 @@ model Subscription {
 
   @@index([status])
   @@index([dodoSubscriptionId])
+  @@index([cashfreeSubscriptionId])
 }
+
 
 model TransactionHistory {
   id           String   @id @default(uuid())

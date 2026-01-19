@@ -163,24 +163,38 @@ export const MetaApiService = {
         return {
           id: item.id || `automation_${index}`,
           postId: item.scopeMediaId || item.postId || '',
+          scopeType: item.scopeType,
+          scopeMediaId: item.scopeMediaId,
           triggerType,
           keyword: item.triggerKeyword || item.keyword || '',
+          triggerKeywords: item.triggerKeywords || [],
           responseMessage: item.privateReplyText || item.responseMessage || '',
+          privateReplyText: item.privateReplyText,
           publicReply: item.publicReplyText || item.publicReply || '',
+          publicReplies: item.publicReplies || [],
+          isPublicReplyEnabled: item.enablePublicReply || false,
+          enablePublicReply: item.enablePublicReply || false,
           active: typeof item.isEnabled === 'boolean' ? item.isEnabled : !!item.active,
           flowName: item.flowName || undefined,
+          // Require Follow
+          requireFollow: item.requireFollow || false,
+          followPromptText: item.followPromptText || undefined,
+          // CTA Buttons
+          ctaButtons: item.ctaButtons || [],
           scheduling: item.isAutomationTimingEnabled ? {
             enabled: true,
             startDate: item.automationStartTime,
             endDate: item.automationEndTime,
           } : undefined,
           stats: {
-            totalSent: Number(item.totalSent) || 0,
+            totalSent: Number(item.executionCount) || Number(item.totalSent) || 0,
             engagementBoost: Number(item.engagementBoost) || 0,
-            lastTriggered: item.lastTriggered || undefined,
+            lastTriggered: item.updatedAt || item.lastTriggered || undefined,
           },
+
         };
       });
+
     } catch (error) {
       console.error('Fetch automations failed:', getErrorMessage(error));
       return [];
@@ -335,7 +349,7 @@ export const SubscriptionService = {
   },
 
   createCheckout: async (planId: string): Promise<{ paymentLink: string; planName: string }> => {
-    const response = await apiClient.post('/subscription/checkout', { planId });
+    const response = await apiClient.post('/subscription/checkout?provider=cashfree', { planId });
     return response.data;
   },
 

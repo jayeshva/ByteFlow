@@ -29,20 +29,32 @@ export interface AutomationRule {
   triggerType: TriggerType;
   sentimentTarget?: SentimentType;
   keyword?: string;
+  triggerKeywords?: string[];
   responseMessage?: string;
+
   privateReplyText?: string;
   publicReply?: string;
+  publicReplies?: string[];
   isPublicReplyEnabled?: boolean;
+  enablePublicReply?: boolean;
+
+
   askForFollow?: boolean;
   intentLabel?: string;
   collectEmail?: boolean;
   active: boolean;
   flowName?: string;
+  // Require Follow feature
+  requireFollow?: boolean;
+  followPromptText?: string;
+  // CTA Buttons
+  ctaButtons?: Array<{ id: string; label: string; url: string }>;
   scheduling?: {
     enabled: boolean;
     startDate?: string;
     endDate?: string;
   };
+
   stats: {
     totalSent: number;
     engagementBoost: number;

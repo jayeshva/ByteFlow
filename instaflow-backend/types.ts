@@ -65,4 +65,9 @@ export interface AutomationRequest {
     isAutomationTimingEnabled: boolean;
     automationStartTime?: string;
     automationEndTime?: string;
+    // Require Follow feature
+    requireFollow?: boolean;
+    followPromptText?: string;
+    // CTA Buttons for DM
+    ctaButtons?: Array<{ id: string; label: string; url: string }>;
 }

@@ -187,9 +187,10 @@ const PostDetailModal: React.FC<PostDetailModalProps> = ({ post, onClose }) => {
             {/* Caption Section */}
             <div className="space-y-4">
               <h3 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Caption</h3>
-              <p className="text-sm text-gray-800 leading-relaxed font-medium bg-gray-50 p-6 rounded-3xl border border-gray-100 italic">
-                "{post.caption}"
-              </p>
+              <div className="text-sm text-gray-800 leading-relaxed font-medium bg-gray-50 p-6 rounded-3xl border border-gray-100">
+                <p className="whitespace-pre-wrap break-words">{post.caption}</p>
+              </div>
+
               <div className="flex space-x-6 px-2">
                 <div className="flex items-center space-x-2 text-gray-600">
                   <Heart size={18} fill="#ef4444" className="text-red-500" />
