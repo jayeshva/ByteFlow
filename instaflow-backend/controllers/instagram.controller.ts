@@ -6,14 +6,14 @@ import { decryptToken } from "../utils/decryption.util";
 export class InstagramController {
 
   // LOGIN URL
-  static async loginUrl(req: Request, res: Response) {
+  static async loginUrl(req: any, res: Response) {
     const tenantId = req.user.tenantId;
     const url = InstagramService.getLoginUrl(tenantId);
     res.json({ url });
   }
 
   // CALLBACK
-  static async callback(req: Request, res: Response) {
+  static async callback(req: any, res: Response) {
     try {
       const { code, state } = req.query;
       const tenantId = state as string;
@@ -57,13 +57,13 @@ export class InstagramController {
   }
 
   // DISCONNECT
-  static async disconnect(req: Request, res: Response) {
+  static async disconnect(req: any, res: Response) {
     await InstagramService.disconnect(req.user.tenantId);
     res.json({ message: "Instagram disconnected" });
   }
 
   // VERIFY
-  static async verify(req: Request, res: Response) {
+  static async verify(req: any, res: Response) {
     const result = await InstagramService.verifyConnection(req.user.tenantId);
     res.json(result);
   }
@@ -79,7 +79,7 @@ export class InstagramController {
       });
 
       if (!account)
-        return res.status(200).json({ message: "No IG account connected", profile: {isIGconnected: false, userFullName: user?.name, userEmail: user?.email} });
+        return res.status(200).json({ message: "No IG account connected", profile: { isIGconnected: false, userFullName: user?.name, userEmail: user?.email } });
 
       const token = decryptToken(account);
 

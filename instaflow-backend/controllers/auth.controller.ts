@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { AuthService } from "../services/auth.service";
-import { isBlacklisted } from "../utils/tokenBlacklist";
+import { isBlacklisted } from "../utils/tokenBlacklist.util";
 
 export class AuthController {
   // -----------------------------

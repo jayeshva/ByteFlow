@@ -1,0 +1,82 @@
+# Docker Compose for Local Development
+# Runs API, Worker, Redis, and Postgres locally
+
+version: '3.8'
+
+services:
+  # Redis for BullMQ (local development)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: instaflow
+      POSTGRES_PASSWORD: instaflow_dev
+      POSTGRES_DB: instaflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U instaflow" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # API Server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    ports:
+      - "4000:8080"
+    environment:
+      - PORT=8080
+      - RUN_MODE=local
+      - DATABASE_URL=postgresql://instaflow:instaflow_dev@postgres:5432/instaflow
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Worker
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      - RUN_MODE=local
+      - DATABASE_URL=postgresql://instaflow:instaflow_dev@postgres:5432/instaflow
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  postgres_data:
