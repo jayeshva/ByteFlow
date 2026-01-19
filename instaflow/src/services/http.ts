@@ -164,10 +164,9 @@ const refreshAccessToken = async (): Promise<string | null> => {
 
 apiClient.interceptors.request.use((config) => {
   const requestId = createRequestId();
-  config.headers = {
-    ...config.headers,
-    "X-Request-Id": requestId,
-  };
+  if (config.headers) {
+    config.headers['X-Request-Id'] = requestId;
+  }
 
   const token = getAccessToken();
   // console.log("[HTTP] Request to:", config.url, "| Token present:", !!token);
@@ -203,10 +202,9 @@ apiClient.interceptors.response.use(
 
       if (newAccessToken) {
         console.log("✅ [Interceptor] Token refreshed, retrying original request...");
-        originalRequest.headers = {
-          ...originalRequest.headers,
-          Authorization: `Bearer ${newAccessToken}`,
-        };
+        if (originalRequest.headers) {
+          originalRequest.headers['Authorization'] = `Bearer ${newAccessToken}`;
+        }
         return apiClient(originalRequest);
       }
 

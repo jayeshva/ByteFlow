@@ -43,13 +43,13 @@ export const MetaApiService = {
     });
     return response.data;
   },
-  
+
   // Fetches real posts via backend
   fetchPosts: async (): Promise<InstagramPost[]> => {
     try {
       const response = await apiClient.get('/instagram/posts');
       const data = Array.isArray(response.data.posts) ? response.data.posts : [];
-    
+
       return data.map((item: any) => ({
         id: item.id,
         mediaUrl: item.media_url,
@@ -67,10 +67,10 @@ export const MetaApiService = {
   },
 
   metaProfile: async (): Promise<any> => {
-   try {
-    const response = await apiClient.get('/instagram/me');
-    return response.data.profile;
-    } catch (error) { 
+    try {
+      const response = await apiClient.get('/instagram/me');
+      return response.data.profile;
+    } catch (error) {
       console.error('Fetch profile failed:', getErrorMessage(error));
       throw error;
     }
@@ -78,10 +78,10 @@ export const MetaApiService = {
 
   // Fetches comments for a specific post (including replies) with pagination support
   fetchComments: async (mediaId: string, cursor?: string): Promise<{
-    comments: { 
-      id: string; 
-      text: string; 
-      username: string; 
+    comments: {
+      id: string;
+      text: string;
+      username: string;
       timestamp: string;
       replies: { id: string; text: string; username: string; timestamp: string }[];
     }[];
@@ -93,10 +93,10 @@ export const MetaApiService = {
     try {
       const params: Record<string, string> = { limit: '25' };
       if (cursor) params.after = cursor;
-      
+
       const response = await apiClient.get(`/instagram/posts/${mediaId}/comments`, { params });
       const data = Array.isArray(response.data.comments) ? response.data.comments : [];
-      
+
       return {
         comments: data.map((item: any) => ({
           id: item.id,
@@ -210,7 +210,7 @@ export const MetaApiService = {
     try {
       let url = `/automate/activity-logs?limit=${limit}`;
       if (cursor) url += `&cursor=${cursor}`;
-      
+
       const response = await apiClient.get(url);
       return {
         logs: response.data?.logs || [],
@@ -238,7 +238,7 @@ export const AuthService = {
     return { success: true };
   },
 
-  verifyOtp: async (email: string, code: string) => {
+  verifyOtp: async (_email: string, code: string) => {
     await new Promise(r => setTimeout(r, 600));
     // Hardcoded simulation: 123456 is always correct
     if (code === '123456') {
@@ -276,11 +276,12 @@ export const AuthService = {
     } catch (error) {
       return {
         success: false,
-        message: error.message      };
+        message: getErrorMessage(error)
+      };
     }
   },
 
-  resetPassword: async (email: string, newPassword: string) => {
+  resetPassword: async (_email: string, _newPassword: string) => {
     await new Promise(r => setTimeout(r, 800));
     // const success = DatabaseService.updateUserPassword(email, newPassword);
     // if (success) {
@@ -301,7 +302,7 @@ export const AuthService = {
     }
   },
 
-  loginWithGoogle: async (googleData: any) => {
+  loginWithGoogle: async (_googleData: any) => {
     await new Promise(r => setTimeout(r, 600));
     // let user = DatabaseService.findUserByEmail(googleData.email);
     // if (!user) {

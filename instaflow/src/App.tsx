@@ -1,15 +1,14 @@
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Routes, Route, Navigate} from 'react-router-dom';
-import { useSelector } from 'react-redux';
-import type { RootState } from './store/store';
+
 
 import LoginScreen from './components/LoginScreen';
 import Dashboard from './components/Dashboard';
 import AuthCallback from './components/AuthCallback';
 import SubscriptionSuccess from './components/SubscriptionSuccess';
 import SubscriptionCancel from './components/SubscriptionCancel';
-import { MetaApiService } from './services/api';
+
 import useMetaProfile from './hooks/useMetaProfile';
 
 export type TabType = 'posts' | 'automations' | 'analytics' | 'settings' | 'onboarding';

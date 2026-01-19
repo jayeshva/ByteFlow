@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { BarChart2, TrendingUp, Users, MessageCircle, ArrowUpRight, ArrowDownRight, Zap } from 'lucide-react';
+import { TrendingUp, Users, MessageCircle, ArrowUpRight, ArrowDownRight, Zap } from 'lucide-react';
 import type { AutomationRule } from '../types';
 
 interface AnalyticsViewProps {

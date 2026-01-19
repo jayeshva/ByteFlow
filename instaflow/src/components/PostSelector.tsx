@@ -35,7 +35,7 @@ const PostSelector: React.FC<PostSelectorProps> = ({
   isSyncing,
   automatedPostIds = [],
 }) => {
-  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
+  const [activeVideoId] = useState<string | null>(null);
   
   const isLoading = isSyncing && posts.length === 0;
 

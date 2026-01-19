@@ -1,8 +1,8 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { type AutomationRule, type InstagramPost, TriggerType, type ActivityLog } from '../types';
 // Added Sparkles to the imported icons from lucide-react
-import { Trash2, ToggleLeft, ToggleRight, MessageSquare, Calendar, Activity, TrendingUp, User, ChevronRight, Sparkles, Clapperboard, CalendarClock, Edit3, Settings2 } from 'lucide-react';
+import { Trash2, MessageSquare, Calendar, Activity, TrendingUp, User, ChevronRight, Sparkles, Clapperboard, CalendarClock, Edit3, Settings2 } from 'lucide-react';
 
 interface AutomationDashboardProps {
   rules: AutomationRule[];

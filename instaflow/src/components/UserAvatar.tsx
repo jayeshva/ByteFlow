@@ -11,14 +11,13 @@ interface UserAvatarProps {
 
 
 function UserAvatar({ user }: UserAvatarProps) {
-  const [hasImage, setHasImage] = useState(true);
   const [imageError, setImageError] = useState(false);
   
   const imageSrc = user.profilePictureUrl || user.profilePic;
   const firstLetter = user.username.charAt(0).toUpperCase();
    console.log("user",user)
   const handleImageError = () => {
-    setHasImage(false);
+
     setImageError(true);
   };
 

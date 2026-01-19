@@ -1,13 +1,13 @@
 
 import React, { useState } from 'react';
-import { Instagram, Zap, ShieldCheck, BarChart2, Facebook } from 'lucide-react';
+import { Zap, ShieldCheck, BarChart2 } from 'lucide-react';
 import { useRef, useEffect } from 'react';
 import { ArrowRight, ChevronLeft, Mail, Lock, User, RefreshCw } from 'lucide-react';
 import { AuthService, MetaApiService } from '../services/api';
-import { Navigate, useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
+import { useNavigate } from 'react-router-dom';
+import { useDispatch } from 'react-redux';
 import { setLoginStatus, setUserProfile } from '../store/userSlice';
-import type { RootState } from '../store/store';
+
 
 
 interface LoginScreenProps {
@@ -24,7 +24,7 @@ const LoginScreen: React.FC<LoginScreenProps> = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const user = useSelector((state: RootState) => state.user.profile);
+
   const navigate = useNavigate();
   const dispatch = useDispatch();
   
@@ -136,7 +136,7 @@ const getIGProfile = async () => {
               dispatch(setLoginStatus(true));
               navigate('/dashboard');
             } else {
-              setError(loginResult.error || 'Login failed');
+              setError((loginResult as any).message || (loginResult as any).error || 'Login failed');
             }
           } else {
             setError(verifyResult.error || 'Invalid verification code.');
@@ -177,7 +177,7 @@ const getIGProfile = async () => {
   const handleGoogleAuth = async () => {
     setIsLoading(true);
     const mockGoogleData = { email: 'user@gmail.com', name: 'Google User', sub: 'g123' };
-    const result = await AuthService.loginWithGoogle(mockGoogleData);
+    await AuthService.loginWithGoogle(mockGoogleData);
     // if (result.success) onLogin();
     setIsLoading(false);
   };
@@ -320,7 +320,7 @@ const getIGProfile = async () => {
                     {otp.map((digit, idx) => (
                       <input
                         key={idx}
-                        ref={(el) => (otpRefs.current[idx] = el)}
+                        ref={(el) => { otpRefs.current[idx] = el; }}
                         type="text"
                         maxLength={1}
                         value={digit}
