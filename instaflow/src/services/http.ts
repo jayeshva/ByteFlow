@@ -5,7 +5,7 @@ const ACCESS_TOKEN_KEY = "accessToken";
 const REFRESH_TOKEN_KEY = "refreshToken";
 
 const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL || "https://hlj5826b-4000.inc1.devtunnels.ms"
+  import.meta.env.VITE_API_BASE_URL || "https://instaflow-api-164769631212.us-central1.run.app"
 ).replace(/\/+$/, "");
 
 const baseConfig = {
@@ -123,10 +123,10 @@ let refreshPromise: Promise<string | null> | null = null;
 
 const refreshAccessToken = async (): Promise<string | null> => {
   const refreshToken = getRefreshToken();
-  
+
   console.log("🔄 [Token Refresh] Starting refresh...");
   console.log("🔄 [Token Refresh] Refresh token present:", !!refreshToken);
-  
+
   if (!refreshToken) {
     console.log("❌ [Token Refresh] No refresh token found in storage");
     return null;
@@ -183,8 +183,8 @@ apiClient.interceptors.response.use(
   async (error: AxiosError) => {
     const originalRequest = error.config as
       | (typeof error.config & {
-          _retry?: boolean;
-        })
+        _retry?: boolean;
+      })
       | undefined;
 
     console.log("🔴 [Interceptor] Error:", error.response?.status, originalRequest?.url);
@@ -198,9 +198,9 @@ apiClient.interceptors.response.use(
     ) {
       originalRequest._retry = true;
       console.log("🔄 [Interceptor] 401 detected, attempting token refresh...");
-      
+
       const newAccessToken = await refreshAccessToken();
-      
+
       if (newAccessToken) {
         console.log("✅ [Interceptor] Token refreshed, retrying original request...");
         originalRequest.headers = {
@@ -209,7 +209,7 @@ apiClient.interceptors.response.use(
         };
         return apiClient(originalRequest);
       }
-      
+
       // Only clear tokens and redirect if refresh truly failed
       console.log("❌ [Interceptor] Token refresh failed, clearing tokens and redirecting...");
       clearAuthTokens();

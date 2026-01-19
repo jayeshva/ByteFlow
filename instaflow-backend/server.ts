@@ -1,4 +1,4 @@
-import 'dotenv/config'; 
+import 'dotenv/config';
 import express from 'express';
 import axios from 'axios';
 import cors from 'cors';
@@ -10,8 +10,12 @@ import automateRoutes from "./routes/automation.routes";
 import subscriptionRoutes from "./routes/subscription.routes";
 import analyticsRoutes from "./routes/analytics.routes";
 import { prisma } from "./prisma";
-import "./workers";
-import { registerBullMQUI } from "./bullmq";
+
+const RUN_MODE = process.env.RUN_MODE || 'local';
+
+if (RUN_MODE === 'local') {
+  require('./workers');
+}
 
 
 const swaggerUi = require("swagger-ui-express");
@@ -24,13 +28,15 @@ app.use(express.json());
 app.use(cors({ origin: '*' }));
 app.use(express.urlencoded({ extended: true }));
 
-registerBullMQUI(app);
+if (RUN_MODE === 'local') {
+  const { registerBullMQUI } = require("./bullmq");
+  registerBullMQUI(app);
+}
 
 
 const PORT = process.env.PORT || 4000;
 const CLIENT_ID = process.env.CLIENT_ID;
 const CLIENT_SECRET = process.env.CLIENT_SECRET;
-const REDIRECT_URI = 'https://hlj5826b-3000.inc1.devtunnels.ms/auth-callback/'; 
 
 (async () => {
   try {
@@ -43,7 +49,7 @@ const REDIRECT_URI = 'https://hlj5826b-3000.inc1.devtunnels.ms/auth-callback/';
 
 
 app.use("/auth", authRoutes);
-app.use ("/instagram", instaRoutes);
+app.use("/instagram", instaRoutes);
 app.use("/automate", automateRoutes);
 app.use("/subscription", subscriptionRoutes);
 app.use("/api", analyticsRoutes);  // Analytics and click tracking
@@ -102,47 +108,31 @@ app.post("/api/auth/callback", async (req, res) => {
   if (!code) return res.status(400).json({ error: "Missing code" });
 
   try {
-    /**
-     * A) Exchange code -> short-lived Instagram User Access Token
-     * Endpoint expects x-www-form-urlencoded body
-     */
     const form = new URLSearchParams();
-    form.append("client_id", CLIENT_ID);
-    form.append("client_secret", CLIENT_SECRET);
+    form.append("client_id", CLIENT_ID || "");
+    form.append("client_secret", CLIENT_SECRET || "");
     form.append("grant_type", "authorization_code");
-    form.append("redirect_uri", REDIRECT_URI); // must EXACTLY match the one used in dialog/oauth
+    form.append("redirect_uri", process.env.IG_REDIRECT_URI || "");
     form.append("code", code);
 
-  
     const shortLivedResponse = await axios.post(
       "https://api.instagram.com/oauth/access_token",
       form,
       { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
     );
 
-    // console.log("Short-lived token response:", shortLivedResponse.data);
+    const { access_token: shortLivedToken, user_id: igUserId } = shortLivedResponse.data;
 
-    // Typically returns { access_token, user_id }
-    const shortLivedToken = shortLivedResponse.data.access_token;
-    const igUserId = shortLivedResponse.data.user_id;
+    if (!shortLivedToken || !igUserId) {
+      return res.status(500).json({ error: "Failed to obtain access token" });
+    }
 
-    // if (!shortLivedToken || !igUserId) {
-    //   return res.status(500).json({
-    //     success: false,
-    //     error: "Token exchange succeeded but access_token/user_id missing",
-    //     raw: shortLivedResponse.data,
-    //   });
-    // }
-
-    /**
-     * B) Exchange short-lived -> long-lived (60 days)
-     */
     const longLivedResponse = await axios.get(
       "https://graph.instagram.com/access_token",
       {
         params: {
           grant_type: "ig_exchange_token",
-          client_secret: CLIENT_SECRET,
+          client_secret: CLIENT_SECRET || "",
           access_token: shortLivedToken,
         },
       }
@@ -150,22 +140,11 @@ app.post("/api/auth/callback", async (req, res) => {
 
     const longLivedToken = longLivedResponse.data.access_token;
     const expiresIn = longLivedResponse.data.expires_in;
-    // console.log("Long-lived token response:", longLivedResponse.data);
-
 
     if (!longLivedToken) {
-      return res.status(500).json({
-        success: false,
-        error: "Long-lived token exchange failed (no access_token returned)",
-        raw: longLivedResponse.data,
-      });
+      return res.status(500).json({ error: "Long-lived token exchange failed" });
     }
 
-    /**
-     * C) Fetch IG profile
-     * Note: Depending on which Instagram product you're using, profile fields can vary.
-     * Start simple and add fields after permissions are approved.
-     */
     const profileResponse = await axios.get(`https://graph.instagram.com/me`, {
       params: {
         fields: "id,username,account_type,media_count,profile_picture_url,followers_count,follows_count",
@@ -175,13 +154,10 @@ app.post("/api/auth/callback", async (req, res) => {
 
     const profile = profileResponse.data;
 
-    /**
-     * D) Persist to DB (no pageAccessToken in IG-direct flow)
-     */
     const account = DatabaseService.linkIGAccount("current-user-id", {
       instagramUserId: igUserId,
       userAccessToken: longLivedToken,
-      expiresIn, // seconds
+      expiresIn,
       username: profile.username,
       accountType: profile.account_type,
       profilePictureUrl: profile.profile_picture_url,
@@ -192,9 +168,33 @@ app.post("/api/auth/callback", async (req, res) => {
 
     return res.json({ success: true, account });
   } catch (error: any) {
-    const errData = error?.response?.data || error?.message;
-    console.error("Auth Error:", errData);
-    return res.status(500).json({ success: false, error: errData });
+    console.error("Auth callback error:", error.response?.data || error.message);
+    res.status(500).json({ error: "Authentication failed" });
+  }
+});
+
+app.get("/api/auth/profile", async (req, res) => {
+  res.json({ success: true });
+});
+
+/**
+ * 2. Instagram Data Endpoints
+ */
+app.get('/api/instagram/posts', async (req, res) => {
+  const account = DatabaseService.getAccountByUserId('current-user-id');
+  if (!account) return res.status(401).json({ error: 'Not connected' });
+
+  try {
+    const response = await axios.get(`https://graph.instagram.com/me/media`, {
+      params: {
+        fields: 'id,caption,media_url,media_type,timestamp,like_count,comments_count',
+        access_token: account.userAccessToken
+      }
+    });
+    res.json(response.data.data);
+  } catch (error: any) {
+    console.error('Fetch posts error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to fetch posts' });
   }
 });
 
@@ -216,7 +216,7 @@ app.get('/api/posts', async (req, res) => {
     });
     console.log(response.data);
     res.json(response.data.data);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Fetch posts error:', error.response?.data || error.message);
     res.status(500).json({ error: 'Failed to fetch posts' });
   }
@@ -254,7 +254,7 @@ app.get('/api/comments', async (req, res) => {
     });
     console.log("Comments response data:", response.data);
     res.json(response.data);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Fetch comments error:', error.response?.data || error.message);
     res.status(500).json({ error: 'Failed to fetch comments' });
   }
@@ -281,7 +281,7 @@ app.post('/direct-dm', async (req, res) => {
     });
 
     res.json(dmResponse.data);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Direct message error:', error.response?.data || error.message);
     res.status(500).json({ error: 'Failed to send direct message' });
   }

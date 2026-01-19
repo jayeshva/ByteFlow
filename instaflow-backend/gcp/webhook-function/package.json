@@ -1,0 +1,17 @@
+{
+    "name": "instagram-webhook-function",
+    "version": "1.0.0",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "deploy": "npm run build && gcloud functions deploy instagram-webhook --runtime nodejs20 --trigger-http --allow-unauthenticated --entry-point instagramWebhook --region us-central1"
+    },
+    "dependencies": {
+        "@google-cloud/functions-framework": "^3.3.0",
+        "@google-cloud/pubsub": "^4.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "typescript": "^5.0.0"
+    }
+}

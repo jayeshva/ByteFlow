@@ -36,8 +36,12 @@ export class InstagramWebhookController {
               timestamp: entry.time,
             };
 
-            await commentQueue.add("comment_events", eventData);
-            console.log("Enqueued comment event:", eventData);
+            if (commentQueue) {
+              await commentQueue.add("comment_events", eventData);
+              console.log("Enqueued comment event:", eventData);
+            } else {
+              console.log("⚠️ skipping queue - commentQueue not initialized (cloud mode?)");
+            }
           }
         }
 

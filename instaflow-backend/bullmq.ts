@@ -10,10 +10,12 @@ export function registerBullMQUI(app: Express) {
   const bullBoardAdapter = new ExpressAdapter();
   bullBoardAdapter.setBasePath(bullBoardBasePath);
 
-  createBullBoard({
-    queues: [new BullMQAdapter(commentQueue)],
-    serverAdapter: bullBoardAdapter
-  });
+  if (commentQueue) {
+    createBullBoard({
+      queues: [new BullMQAdapter(commentQueue)],
+      serverAdapter: bullBoardAdapter
+    });
+  }
 
   app.use(bullBoardBasePath, bullBoardAdapter.getRouter());
 }

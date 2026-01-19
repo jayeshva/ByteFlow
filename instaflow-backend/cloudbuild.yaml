@@ -1,0 +1,98 @@
+# Cloud Build configuration for InstaFlow
+# Builds and deploys API and Worker to Cloud Run
+
+steps:
+  # Build API image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/instaflow-api:latest'
+      - '-f'
+      - 'Dockerfile.api'
+      - '.'
+
+  # Build Worker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/instaflow-worker:latest'
+      - '-f'
+      - 'Dockerfile.worker'
+      - '.'
+
+  # Push API image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/instaflow-api:latest']
+
+  # Push Worker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/instaflow-worker:latest']
+
+  # Deploy API to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'instaflow-api'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/instaflow-api:latest'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--min-instances'
+      - '0'
+      - '--max-instances'
+      - '10'
+      - '--memory'
+      - '512Mi'
+      - '--cpu'
+      - '1'
+      - '--port'
+      - '4000'
+      - '--add-cloudsql-instances'
+      - '$PROJECT_ID:us-central1:insta-dm'
+      - '--set-env-vars'
+      - 'RUN_MODE=cloud,NODE_ENV=production,GCP_PROJECT_ID=$PROJECT_ID,PUBSUB_TOPIC=instagram-webhooks,FRONTEND_URL=https://instaflow.jaydesk.com,IG_REDIRECT_URI=https://instaflow.jaydesk.com/auth-callback,CASHFREE_ENVIRONMENT=TEST,DODO_ENVIRONMENT=test_mode'
+      - '--set-secrets'
+      - 'DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest,CLIENT_ID=CLIENT_ID:latest,CLIENT_SECRET=CLIENT_SECRET:latest,IG_CLIENT_ID=IG_CLIENT_ID:latest,IG_CLIENT_SECRET=IG_CLIENT_SECRET:latest,DODO_API_KEY=DODO_API_KEY:latest,CASHFREE_APP_ID=CASHFREE_APP_ID:latest,CASHFREE_SECRET_KEY=CASHFREE_SECRET_KEY:latest'
+
+  # Deploy Worker to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'instaflow-worker'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/instaflow-worker:latest'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--no-allow-unauthenticated'
+      - '--min-instances'
+      - '1'
+      - '--max-instances'
+      - '5'
+      - '--memory'
+      - '512Mi'
+      - '--cpu'
+      - '1'
+      - '--add-cloudsql-instances'
+      - '$PROJECT_ID:us-central1:insta-dm'
+      - '--set-env-vars'
+      - 'RUN_MODE=cloud,NODE_ENV=production,GCP_PROJECT_ID=$PROJECT_ID,PUBSUB_SUBSCRIPTION=instagram-webhooks-sub'
+      - '--set-secrets'
+      - 'DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest'
+
+images:
+  - 'gcr.io/$PROJECT_ID/instaflow-api:latest'
+  - 'gcr.io/$PROJECT_ID/instaflow-worker:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

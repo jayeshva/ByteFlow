@@ -8,7 +8,7 @@ export class MessageWebhookController {
   static async handleWebhook(req: Request, res: Response) {
     try {
       const body = req.body;
-      
+
       if (!body.entry) return res.sendStatus(200);
 
       for (const entry of body.entry) {
@@ -19,9 +19,9 @@ export class MessageWebhookController {
           if (event.message?.quick_reply) {
             const payload = event.message.quick_reply.payload;
             const senderId = event.sender?.id;
-            
+
             console.log("📩 Quick Reply received:", { payload, senderId });
-            
+
             // Handle FOLLOW_CHECK payload
             if (payload?.startsWith("FOLLOW_CHECK:")) {
               await this.handleFollowCheck(payload, senderId, entry.id);
@@ -44,23 +44,27 @@ export class MessageWebhookController {
     try {
       // Extract automation ID from payload
       const automationId = payload.split(":")[1];
-      
+
       console.log(`📩 handleFollowCheck - Enqueueing follow confirm job:`);
       console.log(`   - automationId: ${automationId}`);
       console.log(`   - senderId: ${senderId}`);
       console.log(`   - igUserId: ${igUserId}`);
 
       // Enqueue to the same comment queue with isFollowConfirm flag
-      await commentQueue.add("comment_events", {
-        tenantId: igUserId, // This will be used to find the IG account
-        automationId: automationId,
-        senderId: senderId,
-        isFollowConfirm: true, // Flag to indicate this is a follow confirmation
-        timestamp: Date.now(),
-      });
-      
+      if (commentQueue) {
+        await commentQueue.add("comment_events", {
+          tenantId: igUserId, // This will be used to find the IG account
+          automationId: automationId,
+          senderId: senderId,
+          isFollowConfirm: true, // Flag to indicate this is a follow confirmation
+          timestamp: Date.now(),
+        });
+      } else {
+        console.log("⚠️ skipping queue - commentQueue not initialized (cloud mode?)");
+      }
+
       console.log("✅ Follow confirm job enqueued");
-      
+
     } catch (err: any) {
       console.error("❌ Failed to enqueue follow confirm:", err.message);
     }
