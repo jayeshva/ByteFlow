@@ -1,13 +1,11 @@
-
 import React from 'react';
-import { Routes, Route, Navigate} from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 
-
-import LoginScreen from './components/LoginScreen';
-import Dashboard from './components/Dashboard';
-import AuthCallback from './components/AuthCallback';
-import SubscriptionSuccess from './components/SubscriptionSuccess';
-import SubscriptionCancel from './components/SubscriptionCancel';
+import { LoginScreen,AuthCallback } from './components/auth';
+import { Dashboard } from './components/dashboard';
+import { SubscriptionSuccess, SubscriptionCancel } from './components/subscription';
+import { LandingPage } from './pages/Landing';
+import { ToastContainer } from './components/ui/Toast';
 
 import useMetaProfile from './hooks/useMetaProfile';
 
@@ -15,25 +13,37 @@ export type TabType = 'posts' | 'automations' | 'analytics' | 'settings' | 'onbo
 
 const App: React.FC = () => {
   const { user } = useMetaProfile();
+
   return (
-    <Routes>
-      <Route
-        path="/"
-        element={
-          <Navigate to={user.isLoggedIn ? '/dashboard' : '/login'} replace />
-        }
-      />
-      <Route path="/login" element={<LoginScreen />} />
-      <Route path="/auth-callback" element={<AuthCallback />} />
-      <Route
-        path="/dashboard"
-        element={user.isLoggedIn ? <Dashboard /> : <Navigate to="/login" replace />}
-      />
-      {/* Subscription pages */}
-      <Route path="/subscription/success" element={<SubscriptionSuccess />} />
-      <Route path="/subscription/cancel" element={<SubscriptionCancel />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <>
+      {/* Global Toast Container */}
+      <ToastContainer />
+
+      <Routes>
+        {/* Landing Page - Public */}
+        <Route path="/" element={<LandingPage />} />
+
+        {/* Auth Routes */}
+        <Route 
+          path="/login" 
+          element={user.isLoggedIn ? <Navigate to="/dashboard" replace /> : <LoginScreen />} 
+        />
+        <Route path="/auth-callback" element={<AuthCallback />} />
+
+        {/* Protected Dashboard */}
+        <Route
+          path="/dashboard"
+          element={user.isLoggedIn ? <Dashboard /> : <Navigate to="/login" replace />}
+        />
+
+        {/* Subscription pages */}
+        <Route path="/subscription/success" element={<SubscriptionSuccess />} />
+        <Route path="/subscription/cancel" element={<SubscriptionCancel />} />
+
+        {/* Catch all - redirect to landing */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 };
 

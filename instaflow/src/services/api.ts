@@ -1,6 +1,6 @@
 
 import { TriggerType, type AutomationRule, type InstagramPost, type ActivityLog } from '../types';
-import { apiClient, getErrorMessage, setAuthTokens } from './http';
+import { apiClient, getErrorMessage, setAuthTokens } from './api/client';
 
 const API_PREFIX = '/api';
 
@@ -46,35 +46,27 @@ export const MetaApiService = {
 
   // Fetches real posts via backend
   fetchPosts: async (): Promise<InstagramPost[]> => {
-    try {
-      const response = await apiClient.get('/instagram/posts');
-      const data = Array.isArray(response.data.posts) ? response.data.posts : [];
+    const response = await apiClient.get('/instagram/posts');
+    const data = Array.isArray(response.data.posts) ? response.data.posts : [];
 
-      return data.map((item: any) => ({
-        id: item.id,
-        mediaUrl: item.media_url,
-        caption: item.caption || '',
-        likes: item.like_count || 0,
-        thumbnailURL: item.thumbnail_url,
-        comments: item.comments_count || 0,
-        mediaType: item.media_type,
-        timestamp: new Date(item.timestamp).toLocaleDateString()
-      }));
-    } catch (error) {
-      console.error('Fetch posts failed:', getErrorMessage(error));
-      return [];
-    }
+    return data.map((item: any) => ({
+      id: item.id,
+      mediaUrl: item.media_url,
+      caption: item.caption || '',
+      likes: item.like_count || 0,
+      thumbnailURL: item.thumbnail_url,
+      comments: item.comments_count || 0,
+      mediaType: item.media_type,
+      timestamp: new Date(item.timestamp).toLocaleDateString()
+    }));
   },
+
 
   metaProfile: async (): Promise<any> => {
-    try {
-      const response = await apiClient.get('/instagram/me');
-      return response.data.profile;
-    } catch (error) {
-      console.error('Fetch profile failed:', getErrorMessage(error));
-      throw error;
-    }
+    const response = await apiClient.get('/instagram/me');
+    return response.data.profile;
   },
+
 
   // Fetches comments for a specific post (including replies) with pagination support
   fetchComments: async (mediaId: string, cursor?: string): Promise<{
@@ -90,36 +82,32 @@ export const MetaApiService = {
       nextCursor: string | null;
     };
   }> => {
-    try {
-      const params: Record<string, string> = { limit: '25' };
-      if (cursor) params.after = cursor;
+    const params: Record<string, string> = { limit: '25' };
+    if (cursor) params.after = cursor;
 
-      const response = await apiClient.get(`/instagram/posts/${mediaId}/comments`, { params });
-      const data = Array.isArray(response.data.comments) ? response.data.comments : [];
+    const response = await apiClient.get(`/instagram/posts/${mediaId}/comments`, { params });
+    const data = Array.isArray(response.data.comments) ? response.data.comments : [];
 
-      return {
-        comments: data.map((item: any) => ({
-          id: item.id,
-          text: item.text || '',
-          username: item.username || 'Instagram User',
-          timestamp: item.timestamp ? new Date(item.timestamp).toLocaleDateString() : '',
-          replies: (item.replies || []).map((reply: any) => ({
-            id: reply.id,
-            text: reply.text || '',
-            username: reply.username || 'Instagram User',
-            timestamp: reply.timestamp ? new Date(reply.timestamp).toLocaleDateString() : '',
-          })),
+    return {
+      comments: data.map((item: any) => ({
+        id: item.id,
+        text: item.text || '',
+        username: item.username || 'Instagram User',
+        timestamp: item.timestamp ? new Date(item.timestamp).toLocaleDateString() : '',
+        replies: (item.replies || []).map((reply: any) => ({
+          id: reply.id,
+          text: reply.text || '',
+          username: reply.username || 'Instagram User',
+          timestamp: reply.timestamp ? new Date(reply.timestamp).toLocaleDateString() : '',
         })),
-        paging: {
-          hasMore: response.data.paging?.hasMore || false,
-          nextCursor: response.data.paging?.nextCursor || null,
-        },
-      };
-    } catch (error) {
-      console.error('Fetch comments failed:', getErrorMessage(error));
-      return { comments: [], paging: { hasMore: false, nextCursor: null } };
-    }
+      })),
+      paging: {
+        hasMore: response.data.paging?.hasMore || false,
+        nextCursor: response.data.paging?.nextCursor || null,
+      },
+    };
   },
+
 
 
 
@@ -145,61 +133,55 @@ export const MetaApiService = {
   },
 
   getAutomations: async (): Promise<AutomationRule[]> => {
-    try {
-      const response = await apiClient.get('/automate');
-      const data = Array.isArray(response.data)
-        ? response.data
-        : Array.isArray(response.data?.automations)
-          ? response.data.automations
-          : [];
+    const response = await apiClient.get('/automate');
+    const data = Array.isArray(response.data)
+      ? response.data
+      : Array.isArray(response.data?.automations)
+        ? response.data.automations
+        : [];
 
-      return data.map((item: any, index: number): AutomationRule => {
-        const matchType = String(item.matchType || '').toUpperCase();
-        let triggerType = TriggerType.CONTAINS;
-        if (matchType === 'EXACT') triggerType = TriggerType.EXACT_MATCH;
-        if (matchType === 'INTENT') triggerType = TriggerType.AI_INTENT;
-        if (matchType === 'ALL') triggerType = TriggerType.EVERY_COMMENT;
+    return data.map((item: any, index: number): AutomationRule => {
+      const matchType = String(item.matchType || '').toUpperCase();
+      let triggerType = TriggerType.CONTAINS;
+      if (matchType === 'EXACT') triggerType = TriggerType.EXACT_MATCH;
+      if (matchType === 'INTENT') triggerType = TriggerType.AI_INTENT;
+      if (matchType === 'ALL') triggerType = TriggerType.EVERY_COMMENT;
 
-        return {
-          id: item.id || `automation_${index}`,
-          postId: item.scopeMediaId || item.postId || '',
-          scopeType: item.scopeType,
-          scopeMediaId: item.scopeMediaId,
-          triggerType,
-          keyword: item.triggerKeyword || item.keyword || '',
-          triggerKeywords: item.triggerKeywords || [],
-          responseMessage: item.privateReplyText || item.responseMessage || '',
-          privateReplyText: item.privateReplyText,
-          publicReply: item.publicReplyText || item.publicReply || '',
-          publicReplies: item.publicReplies || [],
-          isPublicReplyEnabled: item.enablePublicReply || false,
-          enablePublicReply: item.enablePublicReply || false,
-          active: typeof item.isEnabled === 'boolean' ? item.isEnabled : !!item.active,
-          flowName: item.flowName || undefined,
-          // Require Follow
-          requireFollow: item.requireFollow || false,
-          followPromptText: item.followPromptText || undefined,
-          // CTA Buttons
-          ctaButtons: item.ctaButtons || [],
-          scheduling: item.isAutomationTimingEnabled ? {
-            enabled: true,
-            startDate: item.automationStartTime,
-            endDate: item.automationEndTime,
-          } : undefined,
-          stats: {
-            totalSent: Number(item.executionCount) || Number(item.totalSent) || 0,
-            engagementBoost: Number(item.engagementBoost) || 0,
-            lastTriggered: item.updatedAt || item.lastTriggered || undefined,
-          },
-
-        };
-      });
-
-    } catch (error) {
-      console.error('Fetch automations failed:', getErrorMessage(error));
-      return [];
-    }
+      return {
+        id: item.id || `automation_${index}`,
+        postId: item.scopeMediaId || item.postId || '',
+        scopeType: item.scopeType,
+        scopeMediaId: item.scopeMediaId,
+        triggerType,
+        keyword: item.triggerKeyword || item.keyword || '',
+        triggerKeywords: item.triggerKeywords || [],
+        responseMessage: item.privateReplyText || item.responseMessage || '',
+        privateReplyText: item.privateReplyText,
+        publicReply: item.publicReplyText || item.publicReply || '',
+        publicReplies: item.publicReplies || [],
+        isPublicReplyEnabled: item.enablePublicReply || false,
+        enablePublicReply: item.enablePublicReply || false,
+        active: typeof item.isEnabled === 'boolean' ? item.isEnabled : !!item.active,
+        flowName: item.flowName || undefined,
+        // Require Follow
+        requireFollow: item.requireFollow || false,
+        followPromptText: item.followPromptText || undefined,
+        // CTA Buttons
+        ctaButtons: item.ctaButtons || [],
+        scheduling: item.isAutomationTimingEnabled ? {
+          enabled: true,
+          startDate: item.automationStartTime,
+          endDate: item.automationEndTime,
+        } : undefined,
+        stats: {
+          totalSent: Number(item.executionCount) || Number(item.totalSent) || 0,
+          engagementBoost: Number(item.engagementBoost) || 0,
+          lastTriggered: item.updatedAt || item.lastTriggered || undefined,
+        },
+      };
+    });
   },
+
 
   // Fetches activity logs for Global Activity Monitor with pagination
   getActivityLogs: async (limit = 10, cursor?: string): Promise<{
@@ -207,21 +189,17 @@ export const MetaApiService = {
     hasMore: boolean;
     nextCursor: string | null;
   }> => {
-    try {
-      let url = `/automate/activity-logs?limit=${limit}`;
-      if (cursor) url += `&cursor=${cursor}`;
+    let url = `/automate/activity-logs?limit=${limit}`;
+    if (cursor) url += `&cursor=${cursor}`;
 
-      const response = await apiClient.get(url);
-      return {
-        logs: response.data?.logs || [],
-        hasMore: response.data?.hasMore || false,
-        nextCursor: response.data?.nextCursor || null
-      };
-    } catch (error) {
-      console.error('Fetch activity logs failed:', getErrorMessage(error));
-      return { logs: [], hasMore: false, nextCursor: null };
-    }
+    const response = await apiClient.get(url);
+    return {
+      logs: response.data?.logs || [],
+      hasMore: response.data?.hasMore || false,
+      nextCursor: response.data?.nextCursor || null
+    };
   },
+
 
   // Fetches rules for local state
   fetchRules: async (): Promise<AutomationRule[]> => {
