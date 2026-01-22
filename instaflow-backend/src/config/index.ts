@@ -33,7 +33,7 @@ const envSchema = z.object({
     REDIS_HOST: z.string().default('localhost'),
     REDIS_PORT: z.string().transform(Number).default(6379 as any),
     REDIS_URL: z.string().url().optional(),
-    RUN_MODE: z.enum(['local', 'worker', 'api']).default('local'),
+    RUN_MODE: z.enum(['local', 'worker', 'api', 'cloud']).default('local'),
     GCP_PROJECT_ID: z.string().optional(),
     PUBSUB_TOPIC: z.string().default('instagram-webhooks'),
     PUBSUB_SUBSCRIPTION: z.string().default('instagram-webhooks-sub'),
