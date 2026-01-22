@@ -65,3 +65,22 @@ resource "google_secret_manager_secret_iam_member" "worker_secrets_accessor" {
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.worker_sa.email}"
 }
+
+# Permissions for Cloud Build to deploy functions
+resource "google_project_iam_member" "cloudbuild_functions_developer" {
+  project = var.project_id
+  role    = "roles/cloudfunctions.developer"
+  member  = "serviceAccount:164769631212@cloudbuild.gserviceaccount.com"
+}
+
+resource "google_project_iam_member" "cloudbuild_service_account_user" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountUser"
+  member  = "serviceAccount:164769631212@cloudbuild.gserviceaccount.com"
+}
+
+resource "google_project_iam_member" "cloudbuild_run_admin" {
+  project = var.project_id
+  role    = "roles/run.admin"
+  member  = "serviceAccount:164769631212@cloudbuild.gserviceaccount.com"
+}
