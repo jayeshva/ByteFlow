@@ -86,56 +86,38 @@ gcloud functions deploy instagram-webhook \
 - Set Webhook URL to: `https://asia-south1-YOUR_PROJECT.cloudfunctions.net/instagram-webhook`
 - Set Verify Token to match `INSTAGRAM_VERIFY_TOKEN`
 
-## Deploy Cloud Run Services
+## Automated Provisioning & Deployment
 
-### Build and Push Images
+The manual steps below are for reference. For production, we recommend using the automated scripts:
 
+### 1. Provision Everything (Terraform + Build + Deploy)
 ```bash
-# From instaflow-backend directory
-cd /path/to/instaflow-backend
-
-# Build API
-docker build -t gcr.io/YOUR_PROJECT/instaflow-api:latest -f Dockerfile.api .
-docker push gcr.io/YOUR_PROJECT/instaflow-api:latest
-
-# Build Worker
-docker build -t gcr.io/YOUR_PROJECT/instaflow-worker:latest -f Dockerfile.worker .
-docker push gcr.io/YOUR_PROJECT/instaflow-worker:latest
+./gcp/setup-e2e.sh
 ```
 
-### Deploy API Service
-
+### 2. Update Code Only (Cloud Build)
 ```bash
-gcloud run deploy instaflow-api \
-  --image gcr.io/YOUR_PROJECT/instaflow-api:latest \
-  --region asia-south1 \
-  --platform managed \
-  --allow-unauthenticated \
-  --min-instances 0 \
-  --max-instances 10 \
-  --memory 512Mi \
-  --cpu 1 \
-  --port 8080 \
-  --add-cloudsql-instances YOUR_PROJECT:asia-south1:instaflow-db \
-  --set-env-vars "RUN_MODE=cloud,NODE_ENV=production,GCP_PROJECT_ID=YOUR_PROJECT,PUBSUB_TOPIC=instagram-webhooks" \
-  --set-secrets "DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest,CLIENT_ID=CLIENT_ID:latest,CLIENT_SECRET=CLIENT_SECRET:latest"
+gcloud builds submit --config cloudbuild.yaml --substitutions=_PROJECT_ID=$GCP_PROJECT_ID --project=$GCP_PROJECT_ID
 ```
 
-### Deploy Worker Service
+---
 
+## Manual Steps (Reference Only)
+
+### 1. Enable Required APIs (Managed by Terraform)
+... (keep the API list) ...
+
+### 2. Build and Push Images (Use Cloud Build)
+Instead of local Docker, use:
 ```bash
-gcloud run deploy instaflow-worker \
-  --image gcr.io/YOUR_PROJECT/instaflow-worker:latest \
-  --region asia-south1 \
-  --platform managed \
-  --no-allow-unauthenticated \
-  --min-instances 1 \
-  --max-instances 5 \
-  --memory 512Mi \
-  --cpu 1 \
-  --add-cloudsql-instances YOUR_PROJECT:asia-south1:instaflow-db \
-  --set-env-vars "RUN_MODE=cloud,NODE_ENV=production,GCP_PROJECT_ID=YOUR_PROJECT,PUBSUB_SUBSCRIPTION=instagram-webhooks-sub" \
-  --set-secrets "DATABASE_URL=DATABASE_URL:latest,JWT_SECRET=JWT_SECRET:latest"
+gcloud builds submit --config cloudbuild.yaml --substitutions=_PROJECT_ID=YOUR_PROJECT --project=YOUR_PROJECT
+```
+
+### 3. Deploy Cloud Run Services
+The services are pre-configured in Terraform. To update them manually:
+```bash
+gcloud run deploy instaflow-api --image gcr.io/YOUR_PROJECT/instaflow-api:latest --region asia-south1
+gcloud run deploy instaflow-worker --image gcr.io/YOUR_PROJECT/instaflow-worker:latest --region asia-south1
 ```
 
 ## Environment Variables

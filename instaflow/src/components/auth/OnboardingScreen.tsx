@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import { useDispatch, useSelector } from 'react-redux';
 import { setUserProfile } from '../../store/userSlice';
 import { MetaApiService } from '../../services/api';
+import { useApi } from '../../hooks/useApi';
 import type { RootState } from '../../store/store';
 
 interface OnboardingScreenProps {
@@ -13,12 +14,20 @@ interface OnboardingScreenProps {
 
 const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onConnected }) => {
   const [step, setStep] = useState(2);
-  const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const syncCompleteRef = useRef(false);
   const user = useSelector((state: RootState) => state.user.profile);
   const dispatch = useDispatch();
+
+  // Use the useApi hook for getting Instagram login URL
+  const { execute: getLoginUrl, isLoading } = useApi(
+    MetaApiService.getInstagramLoginUrl,
+    {
+      showErrorToast: true,
+      onError: () => setErrorMessage('Unable to start Instagram connection.'),
+    }
+  );
 
   const fireConfetti = useCallback(() => {
     const duration = 5 * 1000;
@@ -61,10 +70,6 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onConnected }) => {
         }
         dispatch(setUserProfile(profileUpdate));
         onConnected?.(account);
-
-      // window.setTimeout(() => {
-       
-      // }, 5000);
     },
     [dispatch, fireConfetti, onConnected]
   );
@@ -98,12 +103,13 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onConnected }) => {
     return () => window.removeEventListener('message', handleMessage);
   }, [handleSyncSuccess]);
 
-  const getInstaConnectionUrl = async () => {
-  setIsLoading(true);
-  setErrorMessage(null);
+  const handleConnect = async () => {
+    setErrorMessage(null);
+    
+    const loginURL = await getLoginUrl();
+    if (!loginURL) return; // Error already handled by useApi
 
-  try {
-    const loginURL = await MetaApiService.getInstagramLoginUrl();
+    console.log("Login URL:", loginURL);
 
     const popup = window.open(
       loginURL,
@@ -122,7 +128,6 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onConnected }) => {
     syncCompleteRef.current = false;
 
     const monitor = window.setInterval(() => {
-      
       console.log("Monitoring popup window...");
       if (syncCompleteRef.current) {
         clearInterval(monitor);
@@ -136,19 +141,6 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({ onConnected }) => {
         setErrorMessage('Connection window closed before completing.');
       }
     }, 500);
-
-  } catch (error) {
-    console.error("Failed to get Instagram connection URL:", error);
-    setErrorMessage('Unable to start Instagram connection.');
-  } finally {
-    // 🔑 Stop ONLY button loading, not syncing
-    setIsLoading(false);
-  }
-};
-
-  
-  const handleConnect = () => {
-    getInstaConnectionUrl();
   };
 
   if (isSyncing) {

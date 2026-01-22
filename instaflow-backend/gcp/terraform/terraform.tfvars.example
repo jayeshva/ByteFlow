@@ -1,0 +1,39 @@
+# InstaFlow Terraform Variables Example
+# Copy this file to terraform.tfvars and fill in your values
+# terraform.tfvars is gitignored for security
+
+# --- GCP Configuration ---
+project_id = "your-gcp-project-id"
+region     = "asia-south1"
+
+# --- Database ---
+db_password = "your-secure-database-password-min-16-chars"
+
+# --- Authentication ---
+jwt_secret         = "your-32-character-jwt-secret-key-here"
+jwt_refresh_secret = "your-32-character-jwt-refresh-secret-here"
+
+# --- Instagram/Meta API ---
+ig_client_id            = "your-instagram-app-id"
+ig_client_secret        = "your-instagram-app-secret"
+ig_webhook_verify_token = "your-random-webhook-verification-token"
+
+# --- Frontend ---
+frontend_url = "https://your-frontend-domain.com"
+
+# --- Payment Providers ---
+dodo_api_key        = "your-dodo-payments-api-key"
+cashfree_app_id     = "your-cashfree-app-id"
+cashfree_secret_key = "your-cashfree-secret-key"
+
+# --- Notes ---
+# Redis (Memorystore) configuration is automatic:
+#   - REDIS_HOST is auto-set from the Memorystore instance IP
+#   - REDIS_PORT defaults to 6379
+# 
+# Database URL is auto-constructed from:
+#   - Cloud SQL private IP
+#   - db_password variable
+
+# --- Security ---
+master_encryption_key = "your-32-character-master-encryption-key"

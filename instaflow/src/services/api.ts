@@ -2,7 +2,7 @@
 import { TriggerType, type AutomationRule, type InstagramPost, type ActivityLog } from '../types';
 import { apiClient, getErrorMessage, setAuthTokens } from './api/client';
 
-const API_PREFIX = '/api';
+
 
 export const MetaApiService = {
   // Initiates the OAuth flow by redirecting to Meta
@@ -32,7 +32,7 @@ export const MetaApiService = {
 
   getInstagramLoginUrl: async (): Promise<string> => {
     const response = await apiClient.get('/instagram/connect-url');
-    return response.data.url;
+    return response.data.data.url;
   },
 
 
@@ -47,7 +47,7 @@ export const MetaApiService = {
   // Fetches real posts via backend
   fetchPosts: async (): Promise<InstagramPost[]> => {
     const response = await apiClient.get('/instagram/posts');
-    const data = Array.isArray(response.data.posts) ? response.data.posts : [];
+    const data = Array.isArray(response.data.data) ? response.data.data : [];
 
     return data.map((item: any) => ({
       id: item.id,
@@ -64,7 +64,9 @@ export const MetaApiService = {
 
   metaProfile: async (): Promise<any> => {
     const response = await apiClient.get('/instagram/me');
-    return response.data.profile;
+    // Backend returns {success: true, data: {profile: {...}}}
+    const data = response.data.data || response.data;
+    return data.profile || data;
   },
 
 
@@ -86,15 +88,16 @@ export const MetaApiService = {
     if (cursor) params.after = cursor;
 
     const response = await apiClient.get(`/instagram/posts/${mediaId}/comments`, { params });
-    const data = Array.isArray(response.data.comments) ? response.data.comments : [];
+    const result = response.data.data;
 
     return {
-      comments: data.map((item: any) => ({
-        id: item.id,
-        text: item.text || '',
-        username: item.username || 'Instagram User',
-        timestamp: item.timestamp ? new Date(item.timestamp).toLocaleDateString() : '',
-        replies: (item.replies || []).map((reply: any) => ({
+      comments: (result?.comments || []).map((comment: any) => ({
+        id: comment.id,
+        text: comment.text || '',
+        username: comment.username || 'Instagram User',
+        timestamp: comment.timestamp ? new Date(comment.timestamp).toLocaleDateString() : '',
+        likeCount: comment.like_count || 0,
+        replies: (comment.replies?.data || []).map((reply: any) => ({
           id: reply.id,
           text: reply.text || '',
           username: reply.username || 'Instagram User',
@@ -102,29 +105,21 @@ export const MetaApiService = {
         })),
       })),
       paging: {
-        hasMore: response.data.paging?.hasMore || false,
-        nextCursor: response.data.paging?.nextCursor || null,
+        hasMore: result?.paging?.hasMore || false,
+        nextCursor: result?.paging?.nextCursor || null,
       },
     };
   },
 
 
-
-
-  // Syncs rule to DB
-  syncRuleToBackend: async (rule: AutomationRule) => {
-    const response = await apiClient.post(`${API_PREFIX}/rules`, rule);
-    return response.data;
-  },
-
   createAutomation: async (payload: Record<string, unknown>) => {
     const response = await apiClient.post('/automate', payload);
-    return response.data;
+    return response.data.data;
   },
 
   updateAutomation: async (automationId: string, payload: Record<string, unknown>) => {
     const response = await apiClient.put(`/automate/${automationId}`, payload);
-    return response.data;
+    return response.data.data;
   },
 
   deleteAutomation: async (automationId: string) => {
@@ -134,11 +129,8 @@ export const MetaApiService = {
 
   getAutomations: async (): Promise<AutomationRule[]> => {
     const response = await apiClient.get('/automate');
-    const data = Array.isArray(response.data)
-      ? response.data
-      : Array.isArray(response.data?.automations)
-        ? response.data.automations
-        : [];
+    // Backend returns { success: true, data: [...] }
+    const data = Array.isArray(response.data.data) ? response.data.data : [];
 
     return data.map((item: any, index: number): AutomationRule => {
       const matchType = String(item.matchType || '').toUpperCase();
@@ -193,36 +185,73 @@ export const MetaApiService = {
     if (cursor) url += `&cursor=${cursor}`;
 
     const response = await apiClient.get(url);
+    const result = response.data.data;
+
     return {
-      logs: response.data?.logs || [],
-      hasMore: response.data?.hasMore || false,
-      nextCursor: response.data?.nextCursor || null
+      logs: result?.logs || [],
+      hasMore: result?.hasMore || false,
+      nextCursor: result?.nextCursor || null
     };
   },
-
-
-  // Fetches rules for local state
-  fetchRules: async (): Promise<AutomationRule[]> => {
-    const response = await apiClient.get(`${API_PREFIX}/rules`);
-    return response.data;
-  }
 };
 
 
 export const AuthService = {
+  // Send OTP for login verification
   sendOtp: async (email: string) => {
-    await new Promise(r => setTimeout(r, 800));
-    console.log(`[SIMULATION] OTP sent to ${email}: 123456`);
-    return { success: true };
+    try {
+      const response = await apiClient.post('/auth/otp/send', { email });
+      return { success: true, message: response.data.message };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error, 'Failed to send OTP.') };
+    }
   },
 
-  verifyOtp: async (_email: string, code: string) => {
-    await new Promise(r => setTimeout(r, 600));
-    // Hardcoded simulation: 123456 is always correct
-    if (code === '123456') {
-      return { success: true };
+  // Verify OTP and complete login
+  verifyOtp: async (email: string, otp: string) => {
+    try {
+      const response = await apiClient.post('/auth/otp/verify', { email, otp });
+      const payload = response.data.data;
+      setAuthTokens(payload.accessToken, payload.refreshToken);
+      return {
+        success: true,
+        user: payload.user,
+        accessToken: payload.accessToken,
+        refreshToken: payload.refreshToken,
+      };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error, 'Invalid OTP.') };
     }
-    return { success: false, error: 'The code you entered is incorrect. Please try again.' };
+  },
+
+  // Request password reset email
+  forgotPassword: async (email: string) => {
+    try {
+      const response = await apiClient.post('/auth/forgot-password', { email });
+      return { success: true, message: response.data.message };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error, 'Failed to send reset email.') };
+    }
+  },
+
+  // Verify reset code before allowing password change
+  verifyResetCode: async (email: string, code: string) => {
+    try {
+      const response = await apiClient.post('/auth/verify-reset-code', { email, code });
+      return { success: true, message: response.data.message };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error, 'Invalid reset code.') };
+    }
+  },
+
+  // Reset password with token from email
+  resetPassword: async (email: string, token: string, password: string) => {
+    try {
+      const response = await apiClient.post('/auth/reset-password', { email, token, password });
+      return { success: true, message: response.data.message };
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error, 'Failed to reset password.') };
+    }
   },
 
   signup: async (data: any) => {
@@ -244,12 +273,22 @@ export const AuthService = {
     try {
       const response = await apiClient.post('/auth/login', { email, password });
       const payload = response.data;
-      setAuthTokens(payload.accessToken, payload.refreshToken);
+
+      if (payload.data?.otpRequired) {
+        return {
+          success: true,
+          otpRequired: true,
+          email: payload.data.email
+        };
+      }
+
+      const { accessToken, refreshToken, user } = payload.data;
+      setAuthTokens(accessToken, refreshToken);
       return {
         success: true,
-        user: payload.user,
-        accessToken: payload.accessToken,
-        refreshToken: payload.refreshToken,
+        user,
+        accessToken,
+        refreshToken,
       };
     } catch (error) {
       return {
@@ -257,15 +296,6 @@ export const AuthService = {
         message: getErrorMessage(error)
       };
     }
-  },
-
-  resetPassword: async (_email: string, _newPassword: string) => {
-    await new Promise(r => setTimeout(r, 800));
-    // const success = DatabaseService.updateUserPassword(email, newPassword);
-    // if (success) {
-    //   return { success: true };
-    // }
-    return { success: false, error: 'User not found.' };
   },
 
   verifyEmail: async (email: string, code: string) => {
@@ -280,13 +310,23 @@ export const AuthService = {
     }
   },
 
-  loginWithGoogle: async (_googleData: any) => {
-    await new Promise(r => setTimeout(r, 600));
-    // let user = DatabaseService.findUserByEmail(googleData.email);
-    // if (!user) {
-    //   user = DatabaseService.createUser({ ...googleData, provider: 'google' });
-    // }
-    return { success: false, error: 'Google login not implemented.' };
+  loginWithGoogle: async (idToken: string) => {
+    try {
+      const response = await apiClient.post('/auth/google-login', { idToken });
+      const payload = response.data.data;
+      setAuthTokens(payload.accessToken, payload.refreshToken);
+      return {
+        success: true,
+        user: payload.user,
+        accessToken: payload.accessToken,
+        refreshToken: payload.refreshToken,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: getErrorMessage(error, 'Google login failed.')
+      };
+    }
   }
 };
 
@@ -319,12 +359,14 @@ export interface SubscriptionData {
 export const SubscriptionService = {
   getPlans: async (): Promise<{ plans: Plan[] }> => {
     const response = await apiClient.get('/subscription/plans');
-    return response.data;
+    // Backend returns {success: true, data: {plans: [...]}}
+    return response.data.data || response.data;
   },
 
   getCurrentSubscription: async (): Promise<SubscriptionData> => {
     const response = await apiClient.get('/subscription/current');
-    return response.data;
+    // Backend returns {success: true, data: {...}}
+    return response.data.data || response.data;
   },
 
   createCheckout: async (planId: string): Promise<{ paymentLink: string; planName: string }> => {
@@ -341,4 +383,16 @@ export const SubscriptionService = {
     const response = await apiClient.get('/subscription/portal');
     return response.data;
   },
+};
+
+export const AnalyticsApiService = {
+  getOverview: async (): Promise<any> => {
+    const response = await apiClient.get('/analytics/overview');
+    return response.data.data;
+  },
+
+  getAutomationAnalytics: async (automationId: string): Promise<any> => {
+    const response = await apiClient.get(`/analytics/automation/${automationId}`);
+    return response.data.data;
+  }
 };

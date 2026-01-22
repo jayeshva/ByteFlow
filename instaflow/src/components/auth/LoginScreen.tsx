@@ -3,19 +3,15 @@ import React, { useState } from 'react';
 import { Zap, ShieldCheck, BarChart2 } from 'lucide-react';
 import { useRef, useEffect } from 'react';
 import { ArrowRight, ChevronLeft, Mail, Lock, User, RefreshCw } from 'lucide-react';
-import { AuthService, MetaApiService } from '../../services/api';
+import { AuthService } from '../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
-import { setLoginStatus, setUserProfile } from '../../store/userSlice';
+import { handleLoginSuccess } from '../../store/authActions';
 import { isValidEmail, sanitizeInput } from '../../lib/security';
-import { setStorageItem } from '../../lib/utils';
+import type { AppDispatch } from '../../store/store';
+import { GoogleLogin } from '@react-oauth/google';
 
-
-
-
-interface LoginScreenProps {
-
-}
+interface LoginScreenProps {}
 
 const LoginScreen: React.FC<LoginScreenProps> = () => {
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login');
@@ -28,45 +24,69 @@ const LoginScreen: React.FC<LoginScreenProps> = () => {
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
-  
-const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  // Password validation
+  const passwordChecks = {
+    minLength: password.length >= 8,
+    hasUppercase: /[A-Z]/.test(password),
+    hasLowercase: /[a-z]/.test(password),
+    hasNumber: /[0-9]/.test(password),
+    hasSpecialChar: /[!@#$%^&*(),.?":{}|<>]/.test(password),
+  };
+  const isPasswordValid = Object.values(passwordChecks).every(Boolean);
 
-  useEffect(() => {
-    if (step === 'otp') {
-      otpRefs.current[0]?.focus();
+  const navigate = useNavigate();
+  const dispatch = useDispatch<AppDispatch>();
+  
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  const handleGoogleLoginSuccess = async (credentialResponse: any) => {
+    setIsLoading(true);
+    setError('');
+    try {
+      // The credential is the id_token from Google
+      const result = await AuthService.loginWithGoogle(credentialResponse.credential);
+      if (result.success) {
+        await dispatch(handleLoginSuccess(result));
+        navigate('/dashboard');
+      } else {
+        setError(result.error || 'Google login failed');
+      }
+    } catch (err) {
+      setError('Google login failed. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
-  }, [step]);
+  };
 
 
   const handleOtpChange = (index: number, value: string) => {
-  if (!/^[a-zA-Z0-9]*$/.test(value)) return;    
+    // Only allow alphanumeric
+    if (!/^[a-zA-Z0-9]*$/.test(value)) return;
+    
     const newOtp = [...otp];
-    newOtp[index] = value;
+    
+    // Handle deletion (value is empty, means backspace was pressed)
+    if (value === '' && otp[index] !== '') {
+      newOtp[index] = '';
+      setOtp(newOtp);
+      // Move to previous box
+      if (index > 0) {
+        setTimeout(() => otpRefs.current[index - 1]?.focus(), 10);
+      }
+      return;
+    }
+    
+    // Handle input
+    newOtp[index] = value.slice(-1); // Take only last character
     setOtp(newOtp);
 
+    // Move to next box if we entered a character
     if (value !== '' && index < 5) {
       otpRefs.current[index + 1]?.focus();
     }
   };
 
-  const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && otp[index] === '' && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
-  };
 
-const getIGProfile = async () => {
-    try {
-      const profile = await MetaApiService.metaProfile();
-      console.log('IG Profile:', profile);
-      return profile;
-    } catch (error) {
-      console.error('Failed to fetch IG profile:', error);
-      return null;
-    }
-  };
 
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
@@ -81,51 +101,55 @@ const getIGProfile = async () => {
       return;
     }
 
+    // Password validation for signup and reset password
+    if ((mode === 'signup' && step === 'form') || (mode === 'forgot' && step === 'reset')) {
+      if (!isPasswordValid) {
+        setError('Password must have 8+ chars, uppercase, lowercase, number, and special character.');
+        setIsLoading(false);
+        return;
+      }
+    }
+
     const sanitizedEmail = sanitizeInput(email);
     const sanitizedName = sanitizeInput(name);
     
     try {
       if (mode === 'login') {
-        const result = await AuthService.login({ email: sanitizedEmail, password });
-        if (result.success) {
-          setStorageItem('accessToken', result.accessToken || '');
-          setStorageItem('refreshToken', result.refreshToken || '');
-          setStorageItem('isLoggedIn', 'true');
-          setStorageItem('isIGConnected', result.user.isIGConnected ? 'true' : 'false');
-          if (result.user.isIGConnected) {
-            const igProfile = await getIGProfile();
-            if (igProfile) {
-              dispatch(setUserProfile({
-                isIGConnected: true,
-                username: igProfile.username,
-                igName: igProfile.name,
-                profilePic: igProfile.profile_pic_url,
-                profilePictureUrl: igProfile.profile_pic_url,
-                followersCount: igProfile.followers_count,
-                followingCount: igProfile.follows_count,                
-              }));
+        if (step === 'form') {
+          const result = await AuthService.login({ email: sanitizedEmail, password });
+          if (result.success) {
+            if (result.otpRequired) {
+              setStep('otp');
+              setSuccessMessage('OTP sent to your email.');
+              return;
             }
+            
+            await dispatch(handleLoginSuccess(result));
+            navigate('/dashboard');
           } else {
-            dispatch(setUserProfile({
-              isIGConnected: false,
-            }));
+            setError(result.message || 'Login failed');
           }
-
-          dispatch(setUserProfile({
-            isIGConnected: result.user.isIGConnected,
-          }));
-
-          dispatch(setLoginStatus(true));
-          navigate('/dashboard');
-        } else {
-          console.log(result);
-          setError(result.message || 'Login failed');
+        } else if (step === 'otp') {
+          // Verify OTP and complete login
+          const otpString = otp.join('');
+          if (otpString.length < 6) {
+            setError('Please enter the full 6-digit code.');
+            setIsLoading(false);
+            return;
+          }
+          const result = await AuthService.verifyOtp(sanitizedEmail, otpString);
+          if (result.success) {
+            console.log(result, 'result');
+            await dispatch(handleLoginSuccess(result));
+            navigate('/dashboard');
+          } else {
+            setError(result.error || 'Invalid OTP');
+          }
         }
       } 
       else if (mode === 'signup') {
         if (step === 'form') {
           const result = await AuthService.signup({ name: sanitizedName, email: sanitizedEmail, password });
-
           if (result.success) {
             setSuccessMessage('Verification code sent. Check your email.');
             setStep('otp');
@@ -143,10 +167,7 @@ const getIGProfile = async () => {
           if (verifyResult.success) {
             const loginResult = await AuthService.login({ email, password });
             if (loginResult.success) {
-              setStorageItem('accessToken', loginResult.accessToken || '');
-              setStorageItem('refreshToken', loginResult.refreshToken || '');
-              setStorageItem('isLoggedIn', 'true');
-              dispatch(setLoginStatus(true));
+              await dispatch(handleLoginSuccess(loginResult));
               navigate('/dashboard');
             } else {
               setError((loginResult as any).message || (loginResult as any).error || 'Login failed');
@@ -158,23 +179,38 @@ const getIGProfile = async () => {
       }
       else if (mode === 'forgot') {
         if (step === 'form') {
-          const result = await AuthService.sendOtp(email);
-          if (result.success) setStep('otp');
-          else setError('Failed to send reset code.');
+          const result = await AuthService.forgotPassword(email);
+          if (result.success) {
+            setStep('otp');
+            setSuccessMessage('Reset code sent to your email.');
+          }
+          else setError(result.error || 'Failed to send reset code.');
         } 
         else if (step === 'otp') {
           const otpString = otp.join('');
-          const verifyResult = await AuthService.verifyOtp(email, otpString);
-          if (verifyResult.success) setStep('reset');
-          else setError('Invalid reset code.');
+          if (otpString.length < 6) {
+            setError('Please enter the full 6-digit code.');
+            setIsLoading(false);
+            return;
+          }
+          // Verify reset code with backend
+          const verifyResult = await AuthService.verifyResetCode(email, otpString);
+          if (verifyResult.success) {
+            setStep('reset');
+            setSuccessMessage('Code verified! Enter your new password.');
+          } else {
+            setError(verifyResult.error || 'Invalid reset code.');
+          }
         }
         else if (step === 'reset') {
-          const result = await AuthService.resetPassword(email, password);
+          const otpString = otp.join('');
+          const result = await AuthService.resetPassword(email, otpString, password);
           if (result.success) {
             setSuccessMessage('Password reset successful! Please login.');
             setMode('login');
             setStep('form');
             setPassword('');
+            setOtp(['', '', '', '', '', '']);
           } else {
             setError(result.error || 'Failed to reset password.');
           }
@@ -187,13 +223,11 @@ const getIGProfile = async () => {
     }
   };
 
-  const handleGoogleAuth = async () => {
-    setIsLoading(true);
-    const mockGoogleData = { email: 'user@gmail.com', name: 'Google User', sub: 'g123' };
-    await AuthService.loginWithGoogle(mockGoogleData);
-    // if (result.success) onLogin();
-    setIsLoading(false);
-  };
+  useEffect(() => {
+    if (step === 'otp') {
+      otpRefs.current[0]?.focus();
+    }
+  }, [step]);
 
   const renderHeader = () => {
     if (mode === 'login') return { title: 'Workspace Access', sub: 'Securely access your automation dashboard' };
@@ -243,11 +277,21 @@ const getIGProfile = async () => {
           {(step !== 'form' || mode === 'forgot') && (
              <button 
                onClick={() => {
-                 if (step === 'reset') setStep('otp');
-                 else if (step === 'otp') setStep('form');
-                 else { setMode('login'); setStep('form'); }
+                 // Clear OTP and messages when going back
+                 setOtp(['', '', '', '', '', '']);
                  setError('');
                  setSuccessMessage('');
+                 
+                 if (step === 'reset') {
+                   setStep('otp');
+                 } else if (step === 'otp') {
+                   setStep('form');
+                 } else {
+                   // Going back to login from forgot password
+                   setMode('login');
+                   setStep('form');
+                   setPassword('');
+                 }
                }}
                className="absolute top-10 left-10 p-4 hover:bg-gray-50 rounded-2xl text-gray-400 hover:text-indigo-600 transition-all flex items-center space-x-2 group"
              >
@@ -312,18 +356,40 @@ const getIGProfile = async () => {
                     </div>
                   )}
                   {(mode !== 'forgot' || step === 'reset') && (
-                    <div className="relative group">
-                      <div className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-indigo-600 transition-colors">
-                        <Lock size={18} />
+                    <div className="space-y-2">
+                      <div className="relative group">
+                        <div className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-indigo-600 transition-colors">
+                          <Lock size={18} />
+                        </div>
+                        <input 
+                          type="password" 
+                          placeholder={step === 'reset' ? "New Password" : "Password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="w-full pl-16 pr-6 py-5 bg-gray-50/50 border border-gray-100 focus:border-indigo-600 focus:bg-white rounded-2xl outline-none transition-all font-bold text-sm text-gray-900 placeholder:text-gray-300"
+                          required
+                        />
                       </div>
-                      <input 
-                        type="password" 
-                        placeholder={step === 'reset' ? "New Password" : "Password"}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full pl-16 pr-6 py-5 bg-gray-50/50 border border-gray-100 focus:border-indigo-600 focus:bg-white rounded-2xl outline-none transition-all font-bold text-sm text-gray-900 placeholder:text-gray-300"
-                        required
-                      />
+                      {/* Password requirements - only for signup and reset */}
+                      {(mode === 'signup' || (mode === 'forgot' && step === 'reset')) && password.length > 0 && (
+                        <div className="grid grid-cols-2 gap-1 px-2 text-[10px]">
+                          <span className={passwordChecks.minLength ? 'text-green-600' : 'text-gray-400'}>
+                            ✓ 8+ characters
+                          </span>
+                          <span className={passwordChecks.hasUppercase ? 'text-green-600' : 'text-gray-400'}>
+                            ✓ Uppercase
+                          </span>
+                          <span className={passwordChecks.hasLowercase ? 'text-green-600' : 'text-gray-400'}>
+                            ✓ Lowercase
+                          </span>
+                          <span className={passwordChecks.hasNumber ? 'text-green-600' : 'text-gray-400'}>
+                            ✓ Number
+                          </span>
+                          <span className={passwordChecks.hasSpecialChar ? 'text-green-600' : 'text-gray-400'}>
+                            ✓ Special (!@#$...)
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
@@ -335,10 +401,20 @@ const getIGProfile = async () => {
                         key={idx}
                         ref={(el) => { otpRefs.current[idx] = el; }}
                         type="text"
-                        maxLength={1}
+                        inputMode="text"
+                        autoComplete="off"
+                        maxLength={2}
                         value={digit}
                         onChange={(e) => handleOtpChange(idx, e.target.value)}
-                        onKeyDown={(e) => handleKeyDown(idx, e)}
+                        onKeyUp={(e) => {
+
+                          if (e.key === 'Backspace' && otp[idx] === '' && idx > 0) {
+                            const newOtp = [...otp];
+                            newOtp[idx - 1] = '';
+                            setOtp(newOtp);
+                            otpRefs.current[idx - 1]?.focus();
+                          }
+                        }}
                         className="w-full h-14 text-center text-xl font-black bg-gray-50/50 border border-gray-100 focus:border-indigo-600 focus:bg-white rounded-xl outline-none transition-all shadow-inner"
                       />
                     ))}
@@ -347,7 +423,17 @@ const getIGProfile = async () => {
                     {mode !== 'signup' && (
                       <button 
                         type="button"
-                        onClick={() => AuthService.sendOtp(email)}
+                        onClick={async () => {
+                          setError('');
+                          const result = mode === 'forgot' 
+                            ? await AuthService.forgotPassword(email) 
+                            : await AuthService.sendOtp(email);
+                          if (result.success) {
+                            setSuccessMessage('Code resent successfully!');
+                          } else {
+                            setError(result.error || 'Failed to resend code.');
+                          }
+                        }}
                         className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center justify-center space-x-2 mx-auto hover:opacity-70 transition-opacity"
                       >
                         <RefreshCw size={12} />
@@ -378,7 +464,13 @@ const getIGProfile = async () => {
                 <div className="text-right">
                   <button 
                     type="button"
-                    onClick={() => { setMode('forgot'); setStep('form'); setError(''); }}
+                    onClick={() => { 
+                      setMode('forgot'); 
+                      setStep('form'); 
+                      setError(''); 
+                      setOtp(['', '', '', '', '', '']);
+                      setPassword('');
+                    }}
                     className="text-[10px] font-black text-gray-300 uppercase tracking-widest hover:text-indigo-600 transition-colors"
                   >
                     Forgot Password?
@@ -398,14 +490,16 @@ const getIGProfile = async () => {
                   </div>
                 </div>
 
-                <div className="w-full">
-                  <button 
-                    onClick={handleGoogleAuth}
-                    className="w-full flex items-center justify-center space-x-4 py-5 bg-white border border-gray-100 hover:border-gray-200 hover:bg-gray-50/50 text-gray-900 rounded-2xl transition-all font-black text-sm shadow-sm hover:shadow-xl hover:-translate-y-0.5 active:scale-95 group"
-                  >
-                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAMAAAC7IEhfAAAA1VBMVEX////pQTQ0qFNChvX5uwQ3gfWnwfmPsvnpPjDoMyP5uQA8g/UmevT99PPoLBnoIwvynpn/+vL5tQB2o/f96cUkpEkWokH51dP3w8D3ycf74N/zpqHqUUbtdW3qTUL86+rrX1fsaWDxlpH0sbP3rADqSzD0r6vuaCzoNTbufXb70HX6wwDxiiHmFRX5vR/4vWS6zvn84ajix2VsnfeusjTy+PN5rUUYp1ZxvYP09/3itxBIqU6m06/n7vyt2sCSy59Xs20sm4QxpV08h+cpi8LA4MfZ7N1OD4L6AAABRElEQVQ4je3QaXOCMBAG4IggBDRYNStar972PqhVW2vpAf//JzUJGUAaoN/bd4ZhNnlmNwlC/+Fp9T1vMKxU+yOXYIwJGQ/KXNvFVi2ORSb9Ijad4FomlttWuyGR3Sz5xzP18eKpFia1CSasNz5QN5wJh0dei3c/dIvcEeGOJMeajgtucnwyZ+60YDdNz9bP5tZ5pUMXtn55dd2qhjc6y60s7hqZ5GCHOfteFr6Rprnr9jjs9GTVdepJfg/XJaO7hiOi6CguYz/IomGK+ELmIHse+xEWO2smg46fg72O/bSkq+zSusn6GfnnQc8vS02DTWZFTG6+5uEWNBZ4S51RV0xmCSiXVNvygy428K5uyPYEZBRo/H18Gob50yEUSZkEvhSDRU9tl8JK7Vg2kFJKw0LHaQBAKQUISpk4QBSGUVSl/ki+ARrOGlgod8FIAAAAAElFTkSuQmCC" className="w-8 h-8 group-hover:scale-110 transition-transform" alt="Google" />
-                    <span className="uppercase tracking-widest text-[11px]">Connect with Google</span>
-                  </button>
+                <div className="w-full flex justify-center">
+                  <GoogleLogin
+                    onSuccess={handleGoogleLoginSuccess}
+                    onError={() => setError('Google login failed')}
+                    theme="outline"
+                    size="large"
+                    text="continue_with"
+                    shape="pill"
+                    width="100%"
+                  />
                 </div>
               </>
             )}
@@ -419,6 +513,8 @@ const getIGProfile = async () => {
                     setStep('form');
                     setError('');
                     setSuccessMessage('');
+                    setOtp(['', '', '', '', '', '']);
+                    setPassword('');
                   }}
                   className="ml-2 text-indigo-600 hover:underline"
                 >

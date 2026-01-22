@@ -30,7 +30,7 @@ const Dashboard: React.FC = () => {
   const [selectedPost, setSelectedPost] = useState<InstagramPost | null>(null);
   
   // React Query Hooks
-  const { data: posts = [], isLoading: postsLoading, refetch: syncPosts } = useInstagramPosts();
+  const { data: posts = [], isLoading: postsLoading, refetch: syncPosts } = useInstagramPosts(user?.isIGConnected);
   const { data: automations = [], refetch: refetchAutomations } = useAutomations();
   const { data: logsData, isLoading: logsLoading } = useActivityLogs(10);
 
@@ -128,7 +128,7 @@ const Dashboard: React.FC = () => {
 
         );
       case "analytics":
-        return <AnalyticsView rules={automations as any} />;
+        return <AnalyticsView />;
 
 
       case "settings":

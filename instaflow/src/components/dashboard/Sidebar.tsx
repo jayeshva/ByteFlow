@@ -2,8 +2,10 @@
 import React, { useEffect, useState } from 'react';
 import { Home, Zap, Settings, BarChart3, LogOut, X, ChevronUp } from 'lucide-react';
 import type { TabType } from '../../App';
-import { logout } from '../../services/api/client';
 import { SubscriptionService, type SubscriptionData } from '../../services/api';
+import { useDispatch } from 'react-redux';
+import { handleLogout } from '../../store/authActions';
+import type { AppDispatch } from '../../store/store';
 import { SubscriptionPlansModal } from '../subscription';
 
 interface SidebarProps {
@@ -16,6 +18,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isMobileOpen = false, onMobileClose }) => {
   const [subscriptionData, setSubscriptionData] = useState<SubscriptionData | null>(null);
   const [showPlansModal, setShowPlansModal] = useState(false);
+  const dispatch = useDispatch<AppDispatch>();
 
   useEffect(() => {
     fetchSubscription();
@@ -120,7 +123,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, isMobileOpen
           </p>
         </button>
         
-        <button className="flex items-center space-x-3 w-full p-3 rounded-xl text-red-500 hover:bg-red-50 transition-all font-bold" onClick={logout}>
+        <button className="flex items-center space-x-3 w-full p-3 rounded-xl text-red-500 hover:bg-red-50 transition-all font-bold" onClick={() => dispatch(handleLogout())}>
           <LogOut size={20} />
           <span className="text-sm">Log Out</span>
         </button>

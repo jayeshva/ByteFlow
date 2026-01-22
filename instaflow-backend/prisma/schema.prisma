@@ -5,8 +5,9 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider   = "prisma-client-js"
+  output     = "../generated/prisma"
+  engineType = "library"
 }
 
 datasource db {
@@ -57,6 +58,8 @@ model User {
   resetToken       String?
   resetTokenExpiry DateTime?
 
+  googleId         String?  @unique
+  avatarUrl        String?
   otpCode          String?
   otpExpiry        DateTime?
 

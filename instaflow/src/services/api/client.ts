@@ -88,6 +88,11 @@ export const normalizeApiError = (error: unknown): ApiError => {
         return { message: error.message };
     }
 
+    // Handle already-normalized ApiError objects (from interceptor)
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+        return error as ApiError;
+    }
+
     return { message: 'An unexpected error occurred' };
 };
 
@@ -99,7 +104,9 @@ export const getErrorMessage = (error: unknown, fallback = 'Request failed. Plea
 
     // Map common error codes to user-friendly messages
     if (apiError.status === 401) {
-        return 'Your session has expired. Please log in again.';
+        // Use actual message if available (e.g., "Invalid email or password")
+        // Only use generic message if no specific message from backend
+        return apiError.message || 'Your session has expired. Please log in again.';
     }
     if (apiError.status === 403) {
         return 'You do not have permission to perform this action.';
@@ -199,12 +206,14 @@ apiClient.interceptors.response.use(
         const originalRequest = error.config as (typeof error.config & { _retry?: boolean }) | undefined;
 
         // Handle 401 with token refresh
+        // Exclude authentication requests themselves from this logic
+        const isAuthRequest = originalRequest?.url?.includes('/auth/');
+
         if (
             error.response?.status === 401 &&
             originalRequest &&
             !originalRequest._retry &&
-            !originalRequest.url?.includes('/auth/refresh') &&
-            !originalRequest.url?.includes('/auth/login')
+            !isAuthRequest
         ) {
             originalRequest._retry = true;
             console.log('[Auth] 401 detected, attempting token refresh...');

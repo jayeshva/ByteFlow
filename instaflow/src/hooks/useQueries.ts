@@ -18,12 +18,13 @@ import type { Plan } from '../schemas/subscription.schema';
  */
 
 // Fetch Instagram posts
-export const useInstagramPosts = () => {
+export const useInstagramPosts = (enabled = true) => {
     const toast = useToast();
 
     return useQuery({
         queryKey: queryKeys.instagram.posts(),
         queryFn: () => MetaApiService.fetchPosts() as Promise<NormalizedPost[]>,
+        enabled, // Only fetch when enabled (e.g., when IG is connected)
         meta: {
             onError: () => {
                 toast.error('Failed to load posts. Please try again.');
