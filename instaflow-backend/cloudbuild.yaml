@@ -10,7 +10,7 @@ steps:
     args:
       - 'build'
       - '-t'
-      - 'gcr.io/${_PROJECT_ID}/instaflow-api:latest'
+      - 'gcr.io/$PROJECT_ID/instaflow-api:latest'
       - '-f'
       - 'Dockerfile.api'
       - '.'
@@ -20,18 +20,18 @@ steps:
     args:
       - 'build'
       - '-t'
-      - 'gcr.io/${_PROJECT_ID}/instaflow-worker:latest'
+      - 'gcr.io/$PROJECT_ID/instaflow-worker:latest'
       - '-f'
       - 'Dockerfile.worker'
       - '.'
 
   # 3. Push API image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/${_PROJECT_ID}/instaflow-api:latest']
+    args: ['push', 'gcr.io/$PROJECT_ID/instaflow-api:latest']
 
   # 4. Push Worker image
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/${_PROJECT_ID}/instaflow-worker:latest']
+    args: ['push', 'gcr.io/$PROJECT_ID/instaflow-worker:latest']
 
   # 5. Update API to use new image (preserves existing env/secrets)
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -41,7 +41,7 @@ steps:
       - 'deploy'
       - 'instaflow-api'
       - '--image'
-      - 'gcr.io/${_PROJECT_ID}/instaflow-api:latest'
+      - 'gcr.io/$PROJECT_ID/instaflow-api:latest'
       - '--region'
       - 'asia-south1'
       - '--platform'
@@ -55,7 +55,7 @@ steps:
       - 'deploy'
       - 'instaflow-worker'
       - '--image'
-      - 'gcr.io/${_PROJECT_ID}/instaflow-worker:latest'
+      - 'gcr.io/$PROJECT_ID/instaflow-worker:latest'
       - '--region'
       - 'asia-south1'
       - '--platform'
@@ -89,13 +89,13 @@ steps:
       - '--region'
       - 'asia-south1'
       - '--set-env-vars'
-      - 'GCP_PROJECT_ID=${_PROJECT_ID},PUBSUB_TOPIC=instagram-webhooks'
+      - 'GCP_PROJECT_ID=$PROJECT_ID,PUBSUB_TOPIC=instagram-webhooks'
       - '--update-secrets'
       - 'INSTAGRAM_VERIFY_TOKEN=IG_WEBHOOK_VERIFY_TOKEN:latest'
 
 images:
-  - 'gcr.io/${_PROJECT_ID}/instaflow-api:latest'
-  - 'gcr.io/${_PROJECT_ID}/instaflow-worker:latest'
+  - 'gcr.io/$PROJECT_ID/instaflow-api:latest'
+  - 'gcr.io/$PROJECT_ID/instaflow-worker:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY
