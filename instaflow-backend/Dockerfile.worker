@@ -34,4 +34,4 @@ ENV NODE_ENV=production
 ENV RUN_MODE=cloud
 
 # Start worker
-CMD ["node", "dist/worker-entry.js"]
+CMD ["node", "dist/src/worker-entry.js"]
