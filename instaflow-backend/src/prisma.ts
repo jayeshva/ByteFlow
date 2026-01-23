@@ -45,7 +45,12 @@ export const initPrisma = async () => {
         });
     } else {
         console.log('[Prisma] Setting up standard connection (DATABASE_URL)');
+        const pool = new Pool({
+            connectionString: process.env.DATABASE_URL,
+        });
+        const adapter = new PrismaPg(pool);
         prismaInstance = new PrismaClient({
+            adapter,
             log: ['info', 'warn', 'error'],
         });
     }
