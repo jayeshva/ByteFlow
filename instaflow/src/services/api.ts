@@ -57,7 +57,7 @@ export const MetaApiService = {
       thumbnailURL: item.thumbnail_url,
       comments: item.comments_count || 0,
       mediaType: item.media_type,
-      timestamp: new Date(item.timestamp).toLocaleDateString()
+      timestamp: item.timestamp || ''  // Keep raw ISO string, let formatDate handle it
     }));
   },
 
@@ -187,8 +187,19 @@ export const MetaApiService = {
     const response = await apiClient.get(url);
     const result = response.data.data;
 
+    // Map backend MessageLog fields to frontend ActivityLog interface
+    const mappedLogs: ActivityLog[] = (result?.logs || []).map((log: any) => ({
+      id: log.id,
+      username: log.senderUsername || 'Unknown',
+      comment: log.commentText || '',
+      action: log.status || 'Unknown',
+      timestamp: log.createdAt,
+      sentiment: '',
+      flowName: log.matchedRuleId || undefined,
+    }));
+
     return {
-      logs: result?.logs || [],
+      logs: mappedLogs,
       hasMore: result?.hasMore || false,
       nextCursor: result?.nextCursor || null
     };

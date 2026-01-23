@@ -63,8 +63,14 @@ export class AutomationService {
         const displayLogs = hasMore ? logs.slice(0, -1) : logs;
         const nextCursor = hasMore && logs.length > 0 ? logs[logs.length - 2].id.toString() : null;
 
+        // Convert BigInt id to string for JSON serialization
+        const serializedLogs = displayLogs.map(log => ({
+            ...log,
+            id: log.id.toString(),
+        }));
+
         return {
-            logs: displayLogs,
+            logs: serializedLogs,
             hasMore,
             nextCursor,
         };

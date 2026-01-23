@@ -6,6 +6,7 @@ import { MailService } from './mail.service';
 import { OAuth2Client } from 'google-auth-library';
 import { config } from '../config';
 import { AppError } from '../utils/AppError';
+import logger from '../utils/logger';
 
 const googleClient = new OAuth2Client(config.GOOGLE_CLIENT_ID);
 
@@ -90,6 +91,10 @@ export class AuthService {
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user) throw AppError.notFound('User not found');
 
+        logger.info(`User verification code: ${user.verificationCode}`);
+        logger.info(`User verification expiry: ${user.verificationExpiry}`);
+        logger.info(`User verification code: ${code}`);
+        logger.info(`User verification expiry: ${new Date()}`);
         if (user.verificationCode !== code) throw AppError.unauthorized('Invalid verification code');
         if (user.verificationExpiry! < new Date()) throw AppError.unauthorized('Verification code expired');
 

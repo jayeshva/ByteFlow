@@ -209,19 +209,34 @@ redisClient.on('error', (err) => {
 
 const RATE_LIMIT_KEY_PREFIX = 'rate_limit:dm:';
 const MAX_CALLS_PER_HOUR = 700; // Buffer under Meta's 750 limit
-const WINDOW_SECONDS = 3600; // 1 hour
+const WINDOW_MS = 3600 * 1000; // 1 hour in milliseconds
 
+/**
+ * Redis-based Sliding Window Rate Limiter
+ * 
+ * Uses Redis Sorted Sets (ZSET) to implement a true sliding window.
+ * Each API call is stored with timestamp as score, allowing accurate
+ * counting of calls within the last hour at any point in time.
+ * 
+ * Key structure: rate_limit:dm:{accountId}
+ * Members: unique call IDs (timestamp + random)
+ * Scores: Unix timestamp in milliseconds
+ */
 export class RedisRateLimiter {
     /**
-     * Check if account can make another call (async)
+     * Check if account can make another call using sliding window
      */
     async canMakeCall(accountId: string): Promise<boolean> {
         try {
             const key = `${RATE_LIMIT_KEY_PREFIX}${accountId}`;
-            const count = await redisClient.get(key);
+            const now = Date.now();
+            const windowStart = now - WINDOW_MS;
 
-            if (!count) return true;
-            return parseInt(count, 10) < MAX_CALLS_PER_HOUR;
+            // Remove expired entries and count remaining in one transaction
+            await redisClient.zremrangebyscore(key, 0, windowStart);
+            const count = await redisClient.zcard(key);
+
+            return count < MAX_CALLS_PER_HOUR;
         } catch (error) {
             logger.error({ error, accountId }, 'Redis canMakeCall error, allowing call');
             return true; // Fail open to not block business
@@ -230,62 +245,100 @@ export class RedisRateLimiter {
 
     /**
      * Get time until next call is allowed (in ms)
+     * Returns time until the oldest entry in the window expires
      */
     async getWaitTime(accountId: string): Promise<number> {
         try {
             const key = `${RATE_LIMIT_KEY_PREFIX}${accountId}`;
-            const [count, ttl] = await Promise.all([
-                redisClient.get(key),
-                redisClient.ttl(key)
-            ]);
+            const now = Date.now();
+            const windowStart = now - WINDOW_MS;
 
-            if (!count || parseInt(count, 10) < MAX_CALLS_PER_HOUR) {
-                return 0;
+            // Clean up expired entries first
+            await redisClient.zremrangebyscore(key, 0, windowStart);
+
+            const count = await redisClient.zcard(key);
+
+            if (count < MAX_CALLS_PER_HOUR) {
+                return 0; // Not rate limited
             }
 
-            return ttl > 0 ? ttl * 1000 : 0;
+            // Get the oldest entry's timestamp
+            const oldest = await redisClient.zrange(key, 0, 0, 'WITHSCORES');
+
+            if (oldest && oldest.length >= 2) {
+                const oldestTimestamp = parseInt(oldest[1], 10);
+                const expiresAt = oldestTimestamp + WINDOW_MS;
+                const waitTime = expiresAt - now;
+                return Math.max(0, waitTime);
+            }
+
+            // Fallback: wait 10 minutes if we can't determine
+            return 10 * 60 * 1000;
         } catch (error) {
             logger.error({ error, accountId }, 'Redis getWaitTime error');
-            return 0;
+            return 10 * 60 * 1000; // 10 minutes fallback
         }
     }
 
     /**
-     * Record a call for an account (atomic increment with TTL)
+     * Record a call for an account using sliding window
      */
     async recordCall(accountId: string): Promise<void> {
         try {
             const key = `${RATE_LIMIT_KEY_PREFIX}${accountId}`;
+            const now = Date.now();
+            const windowStart = now - WINDOW_MS;
 
-            // Atomic increment. If key doesn't exist, starts at 1
-            const newCount = await redisClient.incr(key);
+            // Use pipeline for atomic operations
+            const pipeline = redisClient.pipeline();
 
-            // Set TTL only on first call (when count is 1)
-            if (newCount === 1) {
-                await redisClient.expire(key, WINDOW_SECONDS);
-            }
+            // Remove expired entries
+            pipeline.zremrangebyscore(key, 0, windowStart);
 
-            logger.debug({ accountId, count: newCount, limit: MAX_CALLS_PER_HOUR }, 'Rate limit call recorded');
+            // Add new entry with unique member (timestamp + random to avoid collisions)
+            const member = `${now}:${Math.random().toString(36).slice(2, 8)}`;
+            pipeline.zadd(key, now, member);
+
+            // Set key expiration to auto-cleanup (slightly longer than window)
+            pipeline.expire(key, Math.ceil(WINDOW_MS / 1000) + 60);
+
+            await pipeline.exec();
+
+            // Log for debugging
+            const count = await redisClient.zcard(key);
+            logger.debug({ accountId, count, limit: MAX_CALLS_PER_HOUR }, 'Rate limit call recorded (sliding window)');
         } catch (error) {
             logger.error({ error, accountId }, 'Redis recordCall error');
         }
     }
 
     /**
-     * Get current usage for an account
+     * Get current usage for an account (sliding window)
      */
     async getUsage(accountId: string): Promise<{ count: number; limit: number; resetIn: number }> {
         try {
             const key = `${RATE_LIMIT_KEY_PREFIX}${accountId}`;
-            const [count, ttl] = await Promise.all([
-                redisClient.get(key),
-                redisClient.ttl(key)
-            ]);
+            const now = Date.now();
+            const windowStart = now - WINDOW_MS;
+
+            // Clean up and count
+            await redisClient.zremrangebyscore(key, 0, windowStart);
+            const count = await redisClient.zcard(key);
+
+            // Get time until oldest entry expires
+            let resetIn = 0;
+            if (count >= MAX_CALLS_PER_HOUR) {
+                const oldest = await redisClient.zrange(key, 0, 0, 'WITHSCORES');
+                if (oldest && oldest.length >= 2) {
+                    const oldestTimestamp = parseInt(oldest[1], 10);
+                    resetIn = Math.max(0, (oldestTimestamp + WINDOW_MS) - now);
+                }
+            }
 
             return {
-                count: count ? parseInt(count, 10) : 0,
+                count,
                 limit: MAX_CALLS_PER_HOUR,
-                resetIn: ttl > 0 ? ttl * 1000 : 0,
+                resetIn,
             };
         } catch (error) {
             logger.error({ error, accountId }, 'Redis getUsage error');
@@ -300,17 +353,27 @@ export class RedisRateLimiter {
         try {
             const keys = await redisClient.keys(`${RATE_LIMIT_KEY_PREFIX}*`);
             const result: Record<string, { count: number; resetIn: number }> = {};
+            const now = Date.now();
+            const windowStart = now - WINDOW_MS;
 
             for (const key of keys) {
                 const accountId = key.replace(RATE_LIMIT_KEY_PREFIX, '');
-                const [count, ttl] = await Promise.all([
-                    redisClient.get(key),
-                    redisClient.ttl(key)
-                ]);
-                result[accountId] = {
-                    count: count ? parseInt(count, 10) : 0,
-                    resetIn: ttl > 0 ? ttl * 1000 : 0,
-                };
+
+                // Clean up and count
+                await redisClient.zremrangebyscore(key, 0, windowStart);
+                const count = await redisClient.zcard(key);
+
+                // Get reset time
+                let resetIn = 0;
+                if (count > 0) {
+                    const oldest = await redisClient.zrange(key, 0, 0, 'WITHSCORES');
+                    if (oldest && oldest.length >= 2) {
+                        const oldestTimestamp = parseInt(oldest[1], 10);
+                        resetIn = Math.max(0, (oldestTimestamp + WINDOW_MS) - now);
+                    }
+                }
+
+                result[accountId] = { count, resetIn };
             }
 
             return result;

@@ -69,15 +69,33 @@ export class InstagramService {
                 }
             }
 
+            // logger.info({ igData: res.data }, 'Instagram user data retrieved');
+
             return res.data;
         }, { operationName: 'getInstagramUser' });
     }
 
     static async saveAccount(tenantId: string, igData: any, token: string) {
         const encrypted = encryptToken(token);
-        return prisma.iGAccount.upsert({
-            where: { igBusinessId: igData.id },
-            create: {
+
+        const existingAccount = await prisma.iGAccount.findFirst({
+            where: { tenantId },
+        });
+
+        if (existingAccount) {
+            throw new Error('IG account already exists for this tenant');
+        }
+
+        const isIGAccountAlreadyConnected = await prisma.iGAccount.findFirst({
+            where: { igUserId: igData.user_id, tenantId: { not: tenantId } },
+        });
+
+        if (isIGAccountAlreadyConnected) {
+            throw new Error('IG account already connected to another tenant');
+        }
+
+        const account = await prisma.iGAccount.create({
+            data: {
                 tenantId,
                 igUserId: igData.user_id,
                 igBusinessId: igData.id,
@@ -88,15 +106,10 @@ export class InstagramService {
                 tokenNonce: encrypted.nonce,
                 tokenAuthTag: Buffer.from(encrypted.tag, 'base64'),
             },
-            update: {
-                igUsername: igData.username,
-                igName: igData.name,
-                tokenCiphertext: Buffer.from(encrypted.encryptedToken, 'base64'),
-                tokenKeyBlob: Buffer.from(encrypted.keyBlob),
-                tokenNonce: encrypted.nonce,
-                tokenAuthTag: Buffer.from(encrypted.tag, 'base64'),
-            },
-        });
+        })
+
+        return account;
+
     }
 
     // Helper for auto-token refresh

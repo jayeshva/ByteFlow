@@ -21,8 +21,10 @@ export const generateId = (): string => {
 /**
  * Formats a date to a readable string
  */
-export const formatDate = (date: Date | string): string => {
+export const formatDate = (date: Date | string | null | undefined): string => {
+    if (!date) return '';
     const d = typeof date === 'string' ? new Date(date) : date;
+    if (isNaN(d.getTime())) return '';
     return d.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'short',
