@@ -80,6 +80,7 @@ steps:
       - 'functions'
       - 'deploy'
       - 'instagram-webhook'
+      - '--gen2'
       - '--runtime'
       - 'nodejs20'
       - '--trigger-http'
