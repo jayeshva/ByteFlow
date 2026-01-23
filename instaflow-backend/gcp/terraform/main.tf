@@ -24,7 +24,8 @@ resource "google_project_service" "services" {
     "servicenetworking.googleapis.com",
     "redis.googleapis.com",        # Cloud Memorystore
     "vpcaccess.googleapis.com",    # VPC Access Connector for Cloud Run
-    "compute.googleapis.com"       # Compute Engine for VM Worker
+    "compute.googleapis.com",      # Compute Engine for VM Worker
+    "cloudresourcemanager.googleapis.com" # Required for some gcloud commands to verify projects
   ])
   service            = each.key
   disable_on_destroy = false

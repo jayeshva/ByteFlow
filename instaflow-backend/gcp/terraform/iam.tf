@@ -84,3 +84,28 @@ resource "google_project_iam_member" "cloudbuild_run_admin" {
   role    = "roles/run.admin"
   member  = "serviceAccount:164769631212@cloudbuild.gserviceaccount.com"
 }
+
+resource "google_project_iam_member" "cloudbuild_artifact_registry_writer" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:164769631212@cloudbuild.gserviceaccount.com"
+}
+
+# Permissions for Default Compute Service Account (often used by Cloud Build)
+resource "google_project_iam_member" "compute_functions_developer" {
+  project = var.project_id
+  role    = "roles/cloudfunctions.developer"
+  member  = "serviceAccount:164769631212-compute@developer.gserviceaccount.com"
+}
+
+resource "google_project_iam_member" "compute_service_account_user" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountUser"
+  member  = "serviceAccount:164769631212-compute@developer.gserviceaccount.com"
+}
+
+resource "google_project_iam_member" "compute_artifact_registry_writer" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:164769631212-compute@developer.gserviceaccount.com"
+}
