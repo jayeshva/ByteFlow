@@ -23,11 +23,33 @@ locals {
       systemctl start docker
     fi
     
+    # Install Cloud SQL Auth Proxy
+    if ! command -v cloud-sql-proxy &> /dev/null; then
+      curl -o cloud-sql-proxy https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.1/cloud-sql-proxy.linux.amd64
+      chmod +x cloud-sql-proxy
+      mv cloud-sql-proxy /usr/local/bin/
+    fi
+
+    # Stop existing proxy if running
+    pkill cloud-sql-proxy || true
+
+    # Start Cloud SQL Auth Proxy in background
+    # Note: --address 0.0.0.0 allows docker containers to connect if not on host network, 
+    # but we will use 127.0.0.1 and --network host for simplicity if possible, 
+    # or just --address 0.0.0.0 and use the host IP.
+    cloud-sql-proxy --address 0.0.0.0 --port 5432 ${google_sql_database_instance.postgres.connection_name} &
+
     # Pull and run the worker container
     gcloud auth configure-docker gcr.io --quiet
     docker pull gcr.io/${var.project_id}/instaflow-worker:latest
     
     # Run the worker with environment variables
+    # We use the internal IP of the VM to connect to the proxy running on the host
+    VM_IP=$(hostname -I | awk '{print $1}')
+    
+    docker stop instaflow-worker || true
+    docker rm instaflow-worker || true
+    
     docker run -d \
       --name instaflow-worker \
       --restart always \
@@ -36,7 +58,7 @@ locals {
       -e REDIS_HOST=${google_redis_instance.cache.host} \
       -e REDIS_PORT=${google_redis_instance.cache.port} \
       -e GCP_PROJECT_ID=${var.project_id} \
-      -e DATABASE_URL="$(gcloud secrets versions access latest --secret=DATABASE_URL)" \
+      -e DATABASE_URL="postgresql://instaflow:${var.db_password}@$VM_IP:5432/instaflow" \
       -e JWT_SECRET="$(gcloud secrets versions access latest --secret=JWT_SECRET)" \
       -e JWT_REFRESH_SECRET="$(gcloud secrets versions access latest --secret=JWT_REFRESH_SECRET)" \
       -e MASTER_ENCRYPTION_KEY="$(gcloud secrets versions access latest --secret=MASTER_ENCRYPTION_KEY)" \
@@ -66,6 +88,12 @@ resource "google_project_iam_member" "vm_worker_storage_viewer" {
 resource "google_project_iam_member" "vm_worker_registry_reader" {
   project = var.project_id
   role    = "roles/artifactregistry.reader"
+  member  = "serviceAccount:${google_service_account.vm_worker_sa.email}"
+}
+
+resource "google_project_iam_member" "vm_worker_cloudsql_client" {
+  project = var.project_id
+  role    = "roles/cloudsql.client"
   member  = "serviceAccount:${google_service_account.vm_worker_sa.email}"
 }
 

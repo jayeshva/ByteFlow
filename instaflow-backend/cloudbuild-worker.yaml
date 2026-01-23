@@ -1,0 +1,49 @@
+# Cloud Build configuration for InstaFlow Worker ONLY
+# This file only builds the worker image and updates the VM-based worker.
+# Use this for faster deployments when only worker code changes.
+
+steps:
+  # 1. Build Worker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/instaflow-worker:latest'
+      - '-f'
+      - 'instaflow-backend/Dockerfile.worker'
+      - 'instaflow-backend/.'
+
+  # 2. Push Worker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/instaflow-worker:latest']
+
+  # 3. Update VM-based Worker
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        gcloud compute ssh deploy-user@instaflow-worker-vm --zone=asia-south1-a --quiet --command=" \
+          gcloud auth configure-docker gcr.io --quiet && \
+          docker pull gcr.io/$PROJECT_ID/instaflow-worker:latest && \
+          docker stop instaflow-worker || true && \
+          docker rm instaflow-worker || true && \
+          docker run -d \
+            --name instaflow-worker \
+            --restart always \
+            -e RUN_MODE=local \
+            -e NODE_ENV=production \
+            -e REDIS_HOST=\$(gcloud redis instances describe instaflow-redis --region=asia-south1 --format='get(host)') \
+            -e REDIS_PORT=6379 \
+            -e GCP_PROJECT_ID=$PROJECT_ID \
+            -e DATABASE_URL=\"postgresql://instaflow:\$(gcloud secrets versions access latest --secret=DB_PASSWORD)@\$(hostname -I | awk '{print \$1}'):5432/instaflow\" \
+            -e JWT_SECRET=\"\$(gcloud secrets versions access latest --secret=JWT_SECRET)\" \
+            -e JWT_REFRESH_SECRET=\"\$(gcloud secrets versions access latest --secret=JWT_REFRESH_SECRET)\" \
+            -e MASTER_ENCRYPTION_KEY=\"\$(gcloud secrets versions access latest --secret=MASTER_ENCRYPTION_KEY)\" \
+            gcr.io/$PROJECT_ID/instaflow-worker:latest"
+
+images:
+  - 'gcr.io/$PROJECT_ID/instaflow-worker:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

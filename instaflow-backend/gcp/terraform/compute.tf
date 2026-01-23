@@ -13,6 +13,9 @@ resource "google_cloud_run_v2_service" "api" {
       egress    = "PRIVATE_RANGES_ONLY"
     }
 
+    # Cloud SQL Connection
+    cloud_sql_instance = [google_sql_database_instance.postgres.connection_name]
+
     containers {
       image = "gcr.io/${var.project_id}/instaflow-api:latest"
       
@@ -43,13 +46,8 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
-        name = "DATABASE_URL"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.db_url.secret_id
-            version = "latest"
-          }
-        }
+        name  = "DATABASE_URL"
+        value = "postgresql://instaflow:${var.db_password}@localhost/instaflow?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}"
       }
       env {
         name = "JWT_SECRET"
@@ -172,6 +170,9 @@ resource "google_cloud_run_v2_service" "worker" {
       egress    = "PRIVATE_RANGES_ONLY"
     }
 
+    # Cloud SQL Connection
+    cloud_sql_instance = [google_sql_database_instance.postgres.connection_name]
+
     containers {
       image = "gcr.io/${var.project_id}/instaflow-worker:latest"
       
@@ -189,13 +190,8 @@ resource "google_cloud_run_v2_service" "worker" {
       }
       
       env {
-        name = "DATABASE_URL"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.db_url.secret_id
-            version = "latest"
-          }
-        }
+        name  = "DATABASE_URL"
+        value = "postgresql://instaflow:${var.db_password}@localhost/instaflow?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}"
       }
       env {
         name = "JWT_SECRET"
