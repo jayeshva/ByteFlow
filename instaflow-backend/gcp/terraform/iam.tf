@@ -17,6 +17,12 @@ resource "google_project_iam_member" "api_db_client" {
   member  = "serviceAccount:${google_service_account.api_sa.email}"
 }
 
+resource "google_project_iam_member" "api_db_instance_user" {
+  project = var.project_id
+  role    = "roles/cloudsql.instanceUser"
+  member  = "serviceAccount:${google_service_account.api_sa.email}"
+}
+
 resource "google_project_iam_member" "api_pubsub_publisher" {
   project = var.project_id
   role    = "roles/pubsub.publisher"
@@ -45,6 +51,12 @@ resource "google_secret_manager_secret_iam_member" "api_secrets_accessor" {
 resource "google_project_iam_member" "worker_db_client" {
   project = var.project_id
   role    = "roles/cloudsql.client"
+  member  = "serviceAccount:${google_service_account.worker_sa.email}"
+}
+
+resource "google_project_iam_member" "worker_db_instance_user" {
+  project = var.project_id
+  role    = "roles/cloudsql.instanceUser"
   member  = "serviceAccount:${google_service_account.worker_sa.email}"
 }
 

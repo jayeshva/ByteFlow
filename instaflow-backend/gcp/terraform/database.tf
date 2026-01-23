@@ -14,6 +14,11 @@ resource "google_sql_database_instance" "postgres" {
     backup_configuration {
       enabled = true
     }
+
+    database_flags {
+      name  = "cloudsql.iam_authentication"
+      value = "on"
+    }
   }
 }
 
@@ -26,4 +31,23 @@ resource "google_sql_user" "users" {
   name     = "instaflow"
   instance = google_sql_database_instance.postgres.name
   password = var.db_password
+}
+
+# IAM DB Users for each service account
+resource "google_sql_user" "api_iam_user" {
+  name     = trimsuffix(google_service_account.api_sa.email, ".gserviceaccount.com")
+  instance = google_sql_database_instance.postgres.name
+  type     = "CLOUD_IAM_SERVICE_ACCOUNT"
+}
+
+resource "google_sql_user" "worker_iam_user" {
+  name     = trimsuffix(google_service_account.worker_sa.email, ".gserviceaccount.com")
+  instance = google_sql_database_instance.postgres.name
+  type     = "CLOUD_IAM_SERVICE_ACCOUNT"
+}
+
+resource "google_sql_user" "vm_worker_iam_user" {
+  name     = trimsuffix(google_service_account.vm_worker_sa.email, ".gserviceaccount.com")
+  instance = google_sql_database_instance.postgres.name
+  type     = "CLOUD_IAM_SERVICE_ACCOUNT"
 }

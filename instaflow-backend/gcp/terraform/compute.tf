@@ -13,8 +13,6 @@ resource "google_cloud_run_v2_service" "api" {
       egress    = "PRIVATE_RANGES_ONLY"
     }
 
-    # Cloud SQL Connection
-    cloud_sql_instance = [google_sql_database_instance.postgres.connection_name]
 
     containers {
       image = "gcr.io/${var.project_id}/instaflow-api:latest"
@@ -47,7 +45,7 @@ resource "google_cloud_run_v2_service" "api" {
 
       env {
         name  = "DATABASE_URL"
-        value = "postgresql://instaflow:${var.db_password}@localhost/instaflow?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}"
+        value = "postgresql://instaflow-api-sa@${var.project_id}.iam@localhost/instaflow?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}"
       }
       env {
         name = "JWT_SECRET"
@@ -150,6 +148,18 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
       }
+
+      volume_mounts {
+        name       = "cloudsql"
+        mount_path = "/cloudsql"
+      }
+    }
+
+    volumes {
+      name = "cloudsql"
+      cloud_sql_instance {
+        instances = [google_sql_database_instance.postgres.connection_name]
+      }
     }
   }
 }
@@ -170,8 +180,6 @@ resource "google_cloud_run_v2_service" "worker" {
       egress    = "PRIVATE_RANGES_ONLY"
     }
 
-    # Cloud SQL Connection
-    cloud_sql_instance = [google_sql_database_instance.postgres.connection_name]
 
     containers {
       image = "gcr.io/${var.project_id}/instaflow-worker:latest"
@@ -191,7 +199,7 @@ resource "google_cloud_run_v2_service" "worker" {
       
       env {
         name  = "DATABASE_URL"
-        value = "postgresql://instaflow:${var.db_password}@localhost/instaflow?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}"
+        value = "postgresql://instaflow-worker-sa@${var.project_id}.iam@localhost/instaflow?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}"
       }
       env {
         name = "JWT_SECRET"
@@ -237,6 +245,18 @@ resource "google_cloud_run_v2_service" "worker" {
             version = "latest"
           }
         }
+      }
+
+      volume_mounts {
+        name       = "cloudsql"
+        mount_path = "/cloudsql"
+      }
+    }
+
+    volumes {
+      name = "cloudsql"
+      cloud_sql_instance {
+        instances = [google_sql_database_instance.postgres.connection_name]
       }
     }
   }

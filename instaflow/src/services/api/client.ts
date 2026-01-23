@@ -9,7 +9,7 @@ import { getStorageItem, setStorageItem, removeStorageItem, generateId, isBrowse
  */
 
 const API_BASE_URL = (
-    import.meta.env.VITE_API_BASE_URL || 'https://instaflow-api-164769631212.us-central1.run.app'
+    import.meta.env.VITE_API_BASE_URL || ''
 ).replace(/\/+$/, '');
 
 const baseConfig = {

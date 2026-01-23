@@ -37,7 +37,7 @@ locals {
     # Note: --address 0.0.0.0 allows docker containers to connect if not on host network, 
     # but we will use 127.0.0.1 and --network host for simplicity if possible, 
     # or just --address 0.0.0.0 and use the host IP.
-    cloud-sql-proxy --address 0.0.0.0 --port 5432 ${google_sql_database_instance.postgres.connection_name} &
+    cloud-sql-proxy --address 0.0.0.0 --port 5432 --auto-iam-auth ${google_sql_database_instance.postgres.connection_name} &
 
     # Pull and run the worker container
     gcloud auth configure-docker gcr.io --quiet
@@ -58,7 +58,7 @@ locals {
       -e REDIS_HOST=${google_redis_instance.cache.host} \
       -e REDIS_PORT=${google_redis_instance.cache.port} \
       -e GCP_PROJECT_ID=${var.project_id} \
-      -e DATABASE_URL="postgresql://instaflow:${var.db_password}@$VM_IP:5432/instaflow" \
+      -e DATABASE_URL="postgresql://instaflow-vm-worker@${var.project_id}.iam@$VM_IP:5432/instaflow" \
       -e JWT_SECRET="$(gcloud secrets versions access latest --secret=JWT_SECRET)" \
       -e JWT_REFRESH_SECRET="$(gcloud secrets versions access latest --secret=JWT_REFRESH_SECRET)" \
       -e MASTER_ENCRYPTION_KEY="$(gcloud secrets versions access latest --secret=MASTER_ENCRYPTION_KEY)" \
@@ -94,6 +94,12 @@ resource "google_project_iam_member" "vm_worker_registry_reader" {
 resource "google_project_iam_member" "vm_worker_cloudsql_client" {
   project = var.project_id
   role    = "roles/cloudsql.client"
+  member  = "serviceAccount:${google_service_account.vm_worker_sa.email}"
+}
+
+resource "google_project_iam_member" "vm_worker_cloudsql_instance_user" {
+  project = var.project_id
+  role    = "roles/cloudsql.instanceUser"
   member  = "serviceAccount:${google_service_account.vm_worker_sa.email}"
 }
 
