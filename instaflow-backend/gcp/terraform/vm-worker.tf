@@ -116,7 +116,7 @@ resource "google_compute_firewall" "worker_internal" {
     ports    = ["22", "8080"]
   }
 
-  source_ranges = ["10.0.0.0/8"]  # Internal VPC traffic
+  source_ranges = ["10.0.0.0/8", "35.235.240.0/20"]  # Internal VPC traffic + Google IAP range
   target_tags   = ["instaflow-worker"]
 }
 

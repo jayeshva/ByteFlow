@@ -100,7 +100,7 @@ steps:
     args:
       - '-c'
       - |
-        gcloud compute ssh instaflow-worker-vm --zone=asia-south1-a --command=" \
+        gcloud compute ssh deploy-user@instaflow-worker-vm --zone=asia-south1-a --quiet --command=" \
           gcloud auth configure-docker gcr.io --quiet && \
           docker pull gcr.io/$PROJECT_ID/instaflow-worker:latest && \
           docker stop instaflow-worker || true && \
