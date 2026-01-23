@@ -146,6 +146,16 @@ resource "google_cloud_run_v2_service" "api" {
         }
       }
 
+      env {
+        name = "DATABASE_URL"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.db_url.secret_id
+            version = "latest"
+          }
+        }
+      }
+
       # Master encryption key for token encryption
       env {
         name = "MASTER_ENCRYPTION_KEY"
@@ -250,6 +260,16 @@ resource "google_cloud_run_v2_service" "worker" {
       env {
         name  = "PUBSUB_TOPIC"
         value = google_pubsub_topic.webhook_topic.name
+      }
+
+      env {
+        name = "DATABASE_URL"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.db_url.secret_id
+            version = "latest"
+          }
+        }
       }
 
       # Master encryption key for token encryption

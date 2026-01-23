@@ -58,7 +58,7 @@ locals {
       -e REDIS_HOST=${google_redis_instance.cache.host} \
       -e REDIS_PORT=${google_redis_instance.cache.port} \
       -e GCP_PROJECT_ID=${var.project_id} \
-      -e DATABASE_URL="postgresql://instaflow-vm-worker@${var.project_id}.iam@$VM_IP:5432/instaflow" \
+      -e DATABASE_URL="postgresql://instaflow:${var.db_password}@${google_sql_database_instance.postgres.private_ip_address}:5432/instaflow" \
       -e JWT_SECRET="$(gcloud secrets versions access latest --secret=JWT_SECRET)" \
       -e JWT_REFRESH_SECRET="$(gcloud secrets versions access latest --secret=JWT_REFRESH_SECRET)" \
       -e MASTER_ENCRYPTION_KEY="$(gcloud secrets versions access latest --secret=MASTER_ENCRYPTION_KEY)" \
