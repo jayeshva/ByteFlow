@@ -2,13 +2,13 @@ import 'dotenv/config';
 import app from './src/app';
 import { config } from './src/config';
 import logger from './src/utils/logger';
-import prisma from './src/prisma';
+import prisma, { initPrisma } from './src/prisma';
 
 const PORT = config.PORT || 4000;
 
 const start = async () => {
   try {
-    await prisma.$connect();
+    await initPrisma();
     logger.info('Connected to database');
 
     if (config.RUN_MODE === 'local') {

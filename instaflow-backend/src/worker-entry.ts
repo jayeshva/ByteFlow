@@ -11,7 +11,7 @@
 
 import 'dotenv/config';
 import express from 'express';
-import { prisma } from './prisma';
+import prisma, { initPrisma } from './prisma';
 
 const PORT = process.env.PORT || 8080;
 const app = express();
@@ -26,7 +26,7 @@ async function startWorker() {
 
     // Connect to database
     try {
-        await prisma.$connect();
+        await initPrisma();
         console.log('✅ Connected to database');
     } catch (err) {
         console.error('❌ DB connection error:', err);

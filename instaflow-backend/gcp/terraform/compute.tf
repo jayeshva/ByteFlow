@@ -49,7 +49,7 @@ resource "google_cloud_run_v2_service" "api" {
       }
       env {
         name  = "DB_USER"
-        value = trimsuffix(google_service_account.api_sa.email, ".gserviceaccount.com")
+        value = google_service_account.api_sa.email
       }
       env {
         name  = "DB_NAME"
@@ -211,7 +211,7 @@ resource "google_cloud_run_v2_service" "worker" {
       }
       env {
         name  = "DB_USER"
-        value = trimsuffix(google_service_account.worker_sa.email, ".gserviceaccount.com")
+        value = google_service_account.worker_sa.email
       }
       env {
         name  = "DB_NAME"

@@ -10,46 +10,67 @@ import { Connector } from '@google-cloud/cloud-sql-connector';
 let prismaInstance: PrismaClient;
 const connector = new Connector();
 
-const getPrisma = async () => {
+export const initPrisma = async () => {
     if (prismaInstance) return prismaInstance;
 
-    if (process.env.RUN_MODE === 'cloud') {
+    const runMode = process.env.RUN_MODE;
+    console.log(`[Prisma] Initializing in ${runMode} mode...`);
+
+    if (runMode === 'cloud') {
+        const instanceName = process.env.INSTANCE_CONNECTION_NAME;
+        const dbUser = process.env.DB_USER;
+        const dbName = process.env.DB_NAME || 'instaflow';
+
+        console.log(`[Prisma] Setting up Cloud SQL connection: user=${dbUser}, instance=${instanceName}, db=${dbName}`);
+
+        if (!instanceName || !dbUser) {
+            throw new Error('Missing database configuration: INSTANCE_CONNECTION_NAME or DB_USER');
+        }
+
         const clientOpts = await connector.getOptions({
-            instanceConnectionName: process.env.INSTANCE_CONNECTION_NAME || '',
+            instanceConnectionName: instanceName,
             authType: 'iam' as any,
         });
 
         const pool = new Pool({
             ...clientOpts,
-            user: process.env.DB_USER,
-            database: process.env.DB_NAME || 'instaflow',
+            user: dbUser,
+            database: dbName,
         });
 
         const adapter = new PrismaPg(pool);
-        prismaInstance = new PrismaClient({ adapter });
+        prismaInstance = new PrismaClient({
+            adapter,
+            log: ['query', 'info', 'warn', 'error'],
+        });
     } else {
-        prismaInstance = new PrismaClient();
+        console.log('[Prisma] Setting up standard connection (DATABASE_URL)');
+        prismaInstance = new PrismaClient({
+            log: ['info', 'warn', 'error'],
+        });
+    }
+
+    // Test connection immediately
+    try {
+        await prismaInstance.$connect();
+        console.log('[Prisma] Database connection established successfully');
+    } catch (error) {
+        console.error('[Prisma] Failed to connect to database during initialization:', error);
+        throw error;
     }
 
     return prismaInstance;
 };
 
-// Exporting a proxy to maintain sync identity while using async init
+// Fail-safe proxy: exports the prisma object but throws if used before initPrisma()
 export const prisma = new Proxy({} as PrismaClient, {
     get: (target, prop, receiver) => {
-        // This is a simplified proxy. In a real app, you'd want to ensure 
-        // the client is ready before returning methods.
-        // However, for Prisma, most methods are async anyway.
-        const instance = (prismaInstance as any);
-        if (instance) {
-            return Reflect.get(instance, prop, receiver);
+        if (!prismaInstance) {
+            // During some initialization phases or tests, this might be called.
+            // But main app code should wait for initPrisma().
+            throw new Error(`Prisma property "${String(prop)}" accessed before initPrisma() was called and finished.`);
         }
-
-        // Return a function that awaits the instance before calling
-        return async (...args: any[]) => {
-            const client = await getPrisma();
-            return (client as any)[prop](...args);
-        };
+        return Reflect.get(prismaInstance, prop, receiver);
     },
 });
 
