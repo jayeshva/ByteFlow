@@ -16,20 +16,18 @@ export const initPrisma = async () => {
     if (prismaInstance) return prismaInstance;
 
     const runMode = process.env.RUN_MODE;
+    const dbUrl = process.env.DATABASE_URL;
+
     console.log(`[Prisma] Initializing in ${runMode} mode...`);
 
     let pool: Pool;
 
-    if (runMode === 'cloud') {
+    if (runMode === 'cloud' && process.env.INSTANCE_CONNECTION_NAME) {
         const instanceName = process.env.INSTANCE_CONNECTION_NAME;
-        const dbUser = process.env.DB_USER;
+        const dbUser = process.env.DB_USER || 'instaflow';
         const dbName = process.env.DB_NAME || 'instaflow';
 
         console.log(`[Prisma] Cloud SQL Mode: ${instanceName} as ${dbUser}`);
-
-        if (!instanceName || !dbUser) {
-            throw new Error('Missing Cloud SQL configuration: INSTANCE_CONNECTION_NAME or DB_USER');
-        }
 
         const clientOpts = await connector.getOptions({
             instanceConnectionName: instanceName,
@@ -42,37 +40,13 @@ export const initPrisma = async () => {
             database: dbName,
         });
     } else {
-        const dbUrl = process.env.DATABASE_URL;
-        console.log('[Prisma] Local Mode: Initializing with adapter...');
+        console.log('[Prisma] Mode: Initializing with DATABASE_URL...');
 
         if (!dbUrl) {
             throw new Error('DATABASE_URL is missing in environment!');
         }
 
-        // Explicitly parse the URL to ensure no environment variables override the credentials
-        try {
-            const url = new URL(dbUrl);
-            const user = decodeURIComponent(url.username);
-            const password = decodeURIComponent(url.password);
-            const host = url.hostname;
-            const port = parseInt(url.port || '5432');
-            const database = decodeURIComponent(url.pathname.substring(1)) || 'instaflow';
-
-            console.log(`[Prisma] Local Auth: user=${user}, host=${host}:${port}, db=${database}`);
-
-            pool = new Pool({
-                user,
-                password,
-                host,
-                port,
-                database,
-                // SSL settings for local dev if needed, typically disabled
-            });
-        } catch (err: any) {
-            console.error('[Prisma] Failed to parse DATABASE_URL:', err.message);
-            // Fallback to simple connection string if URL parsing fails
-            pool = new Pool({ connectionString: dbUrl });
-        }
+        pool = new Pool({ connectionString: dbUrl });
     }
 
     const adapter = new PrismaPg(pool);
@@ -81,7 +55,7 @@ export const initPrisma = async () => {
         log: ['info', 'warn', 'error']
     });
 
-    // Verify connection with a real query
+    // Verify connection
     try {
         await prismaInstance.$queryRaw`SELECT 1`;
         console.log('[Prisma] ✅ Database connection verified successfully');
