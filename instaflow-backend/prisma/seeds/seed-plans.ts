@@ -13,10 +13,10 @@ async function seedPlans() {
       name: 'FREE',
       displayName: 'Free',
       priceMonthly: 0,
-      dmLimitMonthly: 100,
+      dmLimitMonthly: 1000000,
       dodoProductId: null, // Free plan doesn't need Dodo product
       features: [
-        '100 DMs per month',
+        '1000000 DMs per month',
         '1 Instagram account',
         'Basic automation triggers',
         'Community support',

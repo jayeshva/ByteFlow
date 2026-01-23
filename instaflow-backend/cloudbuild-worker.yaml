@@ -36,7 +36,7 @@ steps:
             -e REDIS_HOST=\$(gcloud redis instances describe instaflow-redis --region=asia-south1 --format='get(host)') \
             -e REDIS_PORT=6379 \
             -e GCP_PROJECT_ID=$PROJECT_ID \
-            -e DATABASE_URL=\"postgresql://instaflow:\$(gcloud secrets versions access latest --secret=DB_PASSWORD)@\$(hostname -I | awk '{print \$1}'):5432/instaflow\" \
+            -e DATABASE_URL=\"postgresql://instaflow-vm-worker@$PROJECT_ID.iam@\$(hostname -I | awk '{print \$1}'):5432/instaflow\" \
             -e JWT_SECRET=\"\$(gcloud secrets versions access latest --secret=JWT_SECRET)\" \
             -e JWT_REFRESH_SECRET=\"\$(gcloud secrets versions access latest --secret=JWT_REFRESH_SECRET)\" \
             -e MASTER_ENCRYPTION_KEY=\"\$(gcloud secrets versions access latest --secret=MASTER_ENCRYPTION_KEY)\" \

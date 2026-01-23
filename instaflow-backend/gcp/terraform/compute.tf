@@ -44,8 +44,16 @@ resource "google_cloud_run_v2_service" "api" {
       }
 
       env {
-        name  = "DATABASE_URL"
-        value = "postgresql://instaflow-api-sa@${var.project_id}.iam@localhost/instaflow?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}"
+        name  = "INSTANCE_CONNECTION_NAME"
+        value = google_sql_database_instance.postgres.connection_name
+      }
+      env {
+        name  = "DB_USER"
+        value = trimsuffix(google_service_account.api_sa.email, ".gserviceaccount.com")
+      }
+      env {
+        name  = "DB_NAME"
+        value = "instaflow"
       }
       env {
         name = "JWT_SECRET"
@@ -198,8 +206,16 @@ resource "google_cloud_run_v2_service" "worker" {
       }
       
       env {
-        name  = "DATABASE_URL"
-        value = "postgresql://instaflow-worker-sa@${var.project_id}.iam@localhost/instaflow?host=/cloudsql/${google_sql_database_instance.postgres.connection_name}"
+        name  = "INSTANCE_CONNECTION_NAME"
+        value = google_sql_database_instance.postgres.connection_name
+      }
+      env {
+        name  = "DB_USER"
+        value = trimsuffix(google_service_account.worker_sa.email, ".gserviceaccount.com")
+      }
+      env {
+        name  = "DB_NAME"
+        value = "instaflow"
       }
       env {
         name = "JWT_SECRET"

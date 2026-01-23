@@ -4,7 +4,10 @@ import { z } from 'zod';
 const envSchema = z.object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.string().transform(Number).default(4000 as any),
-    DATABASE_URL: z.string().url(),
+    DATABASE_URL: z.string().url().optional(),
+    INSTANCE_CONNECTION_NAME: z.string().optional(),
+    DB_USER: z.string().optional(),
+    DB_NAME: z.string().optional(),
     JWT_SECRET: z.string().min(32),
     JWT_REFRESH_SECRET: z.string().min(32),
 
