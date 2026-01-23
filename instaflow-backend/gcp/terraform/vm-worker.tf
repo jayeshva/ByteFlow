@@ -63,6 +63,12 @@ resource "google_project_iam_member" "vm_worker_storage_viewer" {
   member  = "serviceAccount:${google_service_account.vm_worker_sa.email}"
 }
 
+resource "google_project_iam_member" "vm_worker_registry_reader" {
+  project = var.project_id
+  role    = "roles/artifactregistry.reader"
+  member  = "serviceAccount:${google_service_account.vm_worker_sa.email}"
+}
+
 # Compute Engine instance for worker
 resource "google_compute_instance" "worker_vm" {
   name         = "instaflow-worker-vm"
