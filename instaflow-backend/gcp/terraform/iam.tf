@@ -109,3 +109,10 @@ resource "google_project_iam_member" "compute_artifact_registry_writer" {
   role    = "roles/artifactregistry.writer"
   member  = "serviceAccount:164769631212-compute@developer.gserviceaccount.com"
 }
+
+# Grant Cloud Build permission to manage Compute instances (for VM CI/CD)
+resource "google_project_iam_member" "cloudbuild_compute_admin" {
+  project = var.project_id
+  role    = "roles/compute.instanceAdmin.v1"
+  member  = "serviceAccount:164769631212@cloudbuild.gserviceaccount.com"
+}

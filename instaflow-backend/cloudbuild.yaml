@@ -93,6 +93,31 @@ steps:
       - 'GCP_PROJECT_ID=$PROJECT_ID,PUBSUB_TOPIC=instagram-webhooks'
       - '--update-secrets'
       - 'INSTAGRAM_VERIFY_TOKEN=IG_WEBHOOK_VERIFY_TOKEN:latest'
+      
+  # 9. Update VM-based Worker
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        gcloud compute ssh instaflow-worker-vm --zone=asia-south1-a --command=" \
+          gcloud auth configure-docker gcr.io --quiet && \
+          docker pull gcr.io/$PROJECT_ID/instaflow-worker:latest && \
+          docker stop instaflow-worker || true && \
+          docker rm instaflow-worker || true && \
+          docker run -d \
+            --name instaflow-worker \
+            --restart always \
+            -e RUN_MODE=local \
+            -e NODE_ENV=production \
+            -e REDIS_HOST=$(gcloud compute instances describe instaflow-worker-vm --zone=asia-south1-a --format='get(networkInterfaces[0].networkIP)') \
+            -e REDIS_PORT=6379 \
+            -e GCP_PROJECT_ID=$PROJECT_ID \
+            -e DATABASE_URL=\"\$(gcloud secrets versions access latest --secret=DATABASE_URL)\" \
+            -e JWT_SECRET=\"\$(gcloud secrets versions access latest --secret=JWT_SECRET)\" \
+            -e JWT_REFRESH_SECRET=\"\$(gcloud secrets versions access latest --secret=JWT_REFRESH_SECRET)\" \
+            -e MASTER_ENCRYPTION_KEY=\"\$(gcloud secrets versions access latest --secret=MASTER_ENCRYPTION_KEY)\" \
+            gcr.io/$PROJECT_ID/instaflow-worker:latest"
 
 images:
   - 'gcr.io/$PROJECT_ID/instaflow-api:latest'
