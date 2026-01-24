@@ -272,11 +272,66 @@ export class RedisRateLimiter {
                 return Math.max(0, waitTime);
             }
 
-            // Fallback: wait 10 minutes if we can't determine
-            return 10 * 60 * 1000;
+            // Fallback: wait 1 minute if we can't determine
+            return 60 * 1000;
         } catch (error) {
             logger.error({ error, accountId }, 'Redis getWaitTime error');
-            return 10 * 60 * 1000; // 10 minutes fallback
+            return 60 * 1000; // 1 minute fallback
+        }
+    }
+
+    /**
+     * Atomically check and reserve a slot if available.
+     * Prevents race conditions where multiple workers see the same slot.
+     */
+    async reserveCall(accountId: string): Promise<boolean> {
+        try {
+            const key = `${RATE_LIMIT_KEY_PREFIX}${accountId}`;
+            const now = Date.now();
+            const windowStart = now - WINDOW_MS;
+            const member = `${now}:${Math.random().toString(36).slice(2, 8)}`;
+            const expireSeconds = Math.ceil(WINDOW_MS / 1000) + 60;
+
+            const script = `
+                local key = KEYS[1]
+                local windowStart = ARGV[1]
+                local limit = tonumber(ARGV[2])
+                local now = ARGV[3]
+                local member = ARGV[4]
+                local expire = ARGV[5]
+
+                -- Clean up expired entries
+                redis.call('ZREMRANGEBYSCORE', key, 0, windowStart)
+                
+                -- Check count
+                local count = redis.call('ZCARD', key)
+
+                if count < limit then
+                    -- Reserve slot
+                    redis.call('ZADD', key, now, member)
+                    redis.call('EXPIRE', key, expire)
+                    return 1 -- Success
+                else
+                    return 0 -- Limit reached
+                end
+            `;
+
+            const result = await redisClient.eval(
+                script,
+                1,
+                key,
+                windowStart,
+                MAX_CALLS_PER_HOUR,
+                now,
+                member,
+                expireSeconds
+            );
+
+            return result === 1;
+        } catch (error) {
+            logger.error({ error, accountId }, 'Redis reserveCall error, allowing call (fail open)');
+            // Fallback: rely on downstream checks or fail open if critical
+            return true;
         }
     }
 

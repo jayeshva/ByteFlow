@@ -44,7 +44,8 @@ const retryWorker = new Worker(
     },
     {
         connection: { host: config.REDIS_HOST, port: config.REDIS_PORT },
-        concurrency: 5
+        concurrency: 5,
+        lockDuration: 60000 // Increase lock duration to 60s to avoid lock mismatch errors
     }
 );
 

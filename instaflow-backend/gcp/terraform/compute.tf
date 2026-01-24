@@ -341,6 +341,58 @@ resource "google_cloud_run_v2_service" "worker" {
         }
       }
 
+        # SMTP Configuration
+      env {
+        name  = "SMTP_HOST"
+        value = var.smtp_host
+      }
+      env {
+        name  = "SMTP_PORT"
+        value = tostring(var.smtp_port)
+      }
+      env {
+        name  = "SMTP_FROM"
+        value = var.smtp_from
+      }
+      env {
+        name = "SMTP_USER"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.smtp_user.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "SMTP_PASS"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.smtp_pass.secret_id
+            version = "latest"
+          }
+        }
+      }
+
+      # Google OAuth Configuration
+      env {
+        name = "GOOGLE_CLIENT_ID"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.google_client_id.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name = "GOOGLE_CLIENT_SECRET"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.google_client_secret.secret_id
+            version = "latest"
+          }
+        }
+      }
+
       volume_mounts {
         name       = "cloudsql"
         mount_path = "/cloudsql"
@@ -354,6 +406,14 @@ resource "google_cloud_run_v2_service" "worker" {
       }
     }
   }
+
+  depends_on = [
+    google_secret_manager_secret_iam_member.worker_secrets_accessor,
+    google_secret_manager_secret_version.smtp_pass_v1,
+    google_secret_manager_secret_version.smtp_user_v1,
+    google_secret_manager_secret_version.google_client_id_v1,
+    google_secret_manager_secret_version.google_client_secret_v1
+  ]
 }
 
 # Allow unauthenticated access to API

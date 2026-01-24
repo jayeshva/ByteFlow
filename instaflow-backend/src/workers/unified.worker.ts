@@ -126,7 +126,7 @@ async function checkRateLimitsAndQuota(
 ): Promise<RateLimitCheckResult> {
 
     // 1) Check Redis-based Meta rate limiter (sliding window)
-    if (!(await dmRateLimiter.canMakeCall(igAccount.id))) {
+    if (!(await dmRateLimiter.reserveCall(igAccount.id))) {
         const waitTime = await dmRateLimiter.getWaitTime(igAccount.id);
         const minutes = Math.ceil(waitTime / 60000);
 
@@ -163,7 +163,9 @@ async function checkRateLimitsAndQuota(
     if (recentDMs >= RATE_LIMIT_PER_HOUR) {
         // Get actual wait time from Redis for accurate delay
         const waitTime = await dmRateLimiter.getWaitTime(igAccount.id);
-        const delayMs = waitTime > 0 ? waitTime : 600000; // Fallback to 10 min if Redis has no data
+        // If waitTime is 0 (limit just cleared), wait 1s. Otherwise use calculated time.
+        // If calculation failed (legacy default), wait 1 min.
+        const delayMs = waitTime > 0 ? waitTime : 1000;
         const minutes = Math.ceil(delayMs / 60000);
 
         console.log(`⛔ DB Rate limit reached. Delaying job for ${minutes} minutes.`);
@@ -718,8 +720,8 @@ async function sendValueMessage(
             console.log("✅ Text DM sent successfully");
         }
 
-        // Record call with rate limiter and increment DM count
-        await dmRateLimiter.recordCall(igAccount.id);
+        // Record call with rate limiter (already done in reserveCall) and increment DM count
+        // await dmRateLimiter.recordCall(igAccount.id); // atomic reservation used instead
         await prisma.tenant.update({
             where: { id: tenantId },
             data: {
@@ -768,7 +770,10 @@ export function startBullMQWorker(): Worker {
                 throw new DelayedError();
             }
         },
-        { connection: { host: config.REDIS_HOST, port: config.REDIS_PORT } }
+        {
+            connection: { host: config.REDIS_HOST, port: config.REDIS_PORT },
+            lockDuration: 60000
+        }
     );
 
     bullmqWorker.on("completed", job => {

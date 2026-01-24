@@ -75,7 +75,11 @@ resource "google_secret_manager_secret_iam_member" "worker_secrets_accessor" {
     "DATABASE_URL",
     "JWT_SECRET",
     "JWT_REFRESH_SECRET",
-    "MASTER_ENCRYPTION_KEY"
+    "MASTER_ENCRYPTION_KEY",
+    "SMTP_USER",
+    "SMTP_PASS",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET"
   ])
   secret_id = each.key
   role      = "roles/secretmanager.secretAccessor"
