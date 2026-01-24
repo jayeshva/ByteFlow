@@ -199,6 +199,7 @@ export class AuthService {
                 idToken,
                 audience: config.GOOGLE_CLIENT_ID,
             });
+            logger.info(config.GOOGLE_CLIENT_ID);
             const payload = ticket.getPayload();
             if (!payload || !payload.email) throw AppError.unauthorized('Invalid Google token');
 

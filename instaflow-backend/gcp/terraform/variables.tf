@@ -73,7 +73,7 @@ variable "cashfree_secret_key" {
 variable "frontend_url" {
   description = "Frontend Application URL"
   type        = string
-  default     = "https://hlj5826b-3000.inc1.devtunnels.ms"
+  default     = "https://instaflow.jaydesk.com/"
 }
 
 variable "master_encryption_key" {
@@ -81,4 +81,51 @@ variable "master_encryption_key" {
   type        = string
   sensitive   = true
   default     = "super-secret-master-key-change-me-in-prod"
+}
+
+# SMTP Configuration
+variable "smtp_host" {
+  description = "SMTP server host"
+  type        = string
+  default     = "smtp.gmail.com"
+}
+
+variable "smtp_port" {
+  description = "SMTP server port"
+  type        = number
+  default     = 587
+}
+
+variable "smtp_user" {
+  description = "SMTP username/email"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "smtp_pass" {
+  description = "SMTP password or app password"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "smtp_from" {
+  description = "SMTP from email address"
+  type        = string
+  default     = "noreply@instaflow.me"
+}
+
+# Google OAuth
+variable "google_client_id" {
+  description = "Google OAuth Client ID"
+  type        = string
+  default     = ""
+}
+
+variable "google_client_secret" {
+  description = "Google OAuth Client Secret"
+  type        = string
+  sensitive   = true
+  default     = ""
 }

@@ -126,3 +126,55 @@ resource "google_secret_manager_secret_version" "master_encryption_key_v1" {
   secret      = google_secret_manager_secret.master_encryption_key.id
   secret_data = var.master_encryption_key
 }
+
+# SMTP User Secret
+resource "google_secret_manager_secret" "smtp_user" {
+  secret_id = "SMTP_USER"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "smtp_user_v1" {
+  secret      = google_secret_manager_secret.smtp_user.id
+  secret_data = var.smtp_user
+}
+
+# SMTP Password Secret
+resource "google_secret_manager_secret" "smtp_pass" {
+  secret_id = "SMTP_PASS"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "smtp_pass_v1" {
+  secret      = google_secret_manager_secret.smtp_pass.id
+  secret_data = var.smtp_pass
+}
+
+# Google OAuth Client ID
+resource "google_secret_manager_secret" "google_client_id" {
+  secret_id = "GOOGLE_CLIENT_ID"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "google_client_id_v1" {
+  secret      = google_secret_manager_secret.google_client_id.id
+  secret_data = var.google_client_id
+}
+
+# Google OAuth Client Secret
+resource "google_secret_manager_secret" "google_client_secret" {
+  secret_id = "GOOGLE_CLIENT_SECRET"
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_version" "google_client_secret_v1" {
+  secret      = google_secret_manager_secret.google_client_secret.id
+  secret_data = var.google_client_secret
+}
