@@ -19,6 +19,9 @@ const start = async () => {
       registerBullMQUI(app);
     }
 
+    const { registerBullMQUI } = require('./src/bullmq');
+    registerBullMQUI(app);
+
     app.listen(PORT, () => {
       logger.info(`Server is running on port ${PORT}`);
     });

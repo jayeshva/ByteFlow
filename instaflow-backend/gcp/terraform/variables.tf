@@ -87,7 +87,7 @@ variable "master_encryption_key" {
 variable "smtp_host" {
   description = "SMTP server host"
   type        = string
-  default     = "smtp.gmail.com"
+  default     = "smtp.zoho.in"
 }
 
 variable "smtp_port" {
@@ -113,7 +113,7 @@ variable "smtp_pass" {
 variable "smtp_from" {
   description = "SMTP from email address"
   type        = string
-  default     = "noreply@instaflow.me"
+  default     = "no-reply@jaydesk.com"
 }
 
 # Google OAuth

@@ -11,6 +11,36 @@ import logger from '../utils/logger';
 const googleClient = new OAuth2Client(config.GOOGLE_CLIENT_ID);
 
 export class AuthService {
+    static async checkAndIncrementRateLimit(user: any) {
+        const now = new Date();
+        const limitReset = user.otpRateLimitReset;
+
+        // Reset if we're past the reset time or if it's not set
+        if (!limitReset || now > limitReset) {
+            await prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    otpRateLimitCount: 1,
+                    otpRateLimitReset: new Date(now.getTime() + 60 * 60 * 1000), // 1hr
+                },
+            });
+            return;
+        }
+
+        // Check limit
+        if (user.otpRateLimitCount >= 10) {
+            throw AppError.tooManyRequests('Maximum OTP limit reached. Please try again in 1 hour.');
+        }
+
+        // Increment
+        await prisma.user.update({
+            where: { id: user.id },
+            data: {
+                otpRateLimitCount: { increment: 1 },
+            },
+        });
+    }
+
     static async signup(email: string, password: string, name: string) {
         const existing = await prisma.user.findUnique({ where: { email } });
         if (existing && existing.isVerified) {
@@ -57,6 +87,11 @@ export class AuthService {
                     name,
                 },
             });
+        }
+
+        // Check rate limit if user exists
+        if (existing) {
+            await this.checkAndIncrementRateLimit(existing);
         }
 
         await MailService.sendVerificationEmail(email, verificationCode);
@@ -143,6 +178,9 @@ export class AuthService {
             throw AppError.badRequest('This account uses Google Sign-In. Please login with Google instead.');
         }
 
+        // Check rate limit
+        await this.checkAndIncrementRateLimit(user);
+
         // Generate 6-digit OTP for password reset
         const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
         const resetTokenExpiry = new Date(Date.now() + 1000 * 60 * 15); // 15 min
@@ -195,11 +233,15 @@ export class AuthService {
 
     static async googleAuth(idToken: string) {
         try {
+            if (!config.GOOGLE_CLIENT_ID) {
+                throw new Error('Google Client ID is not configured');
+            }
+
             const ticket = await googleClient.verifyIdToken({
                 idToken,
                 audience: config.GOOGLE_CLIENT_ID,
             });
-            logger.info(config.GOOGLE_CLIENT_ID);
+
             const payload = ticket.getPayload();
             if (!payload || !payload.email) throw AppError.unauthorized('Invalid Google token');
 
@@ -278,7 +320,7 @@ export class AuthService {
 
         if (user.otpCode !== otp) throw AppError.unauthorized('Invalid OTP');
         if (user.otpExpiry! < new Date()) throw AppError.unauthorized('OTP expired');
-        if(user.googleId) throw AppError.badRequest('This account uses Google. Please login with your Google account.');
+        if (user.googleId) throw AppError.badRequest('This account uses Google. Please login with your Google account.');
 
         const tenant = await prisma.tenant.findFirst({
             where: { id: user.tenantId },

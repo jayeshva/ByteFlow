@@ -40,7 +40,11 @@ resource "google_secret_manager_secret_iam_member" "api_secrets_accessor" {
     "CASHFREE_APP_ID",
     "CASHFREE_SECRET_KEY",
     "IG_WEBHOOK_VERIFY_TOKEN",
-    "MASTER_ENCRYPTION_KEY"
+    "MASTER_ENCRYPTION_KEY",
+    "SMTP_USER",
+    "SMTP_PASS",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET"
   ])
   secret_id = each.key
   role      = "roles/secretmanager.secretAccessor"

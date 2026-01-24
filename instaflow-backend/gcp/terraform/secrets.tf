@@ -137,7 +137,7 @@ resource "google_secret_manager_secret" "smtp_user" {
 
 resource "google_secret_manager_secret_version" "smtp_user_v1" {
   secret      = google_secret_manager_secret.smtp_user.id
-  secret_data = var.smtp_user
+  secret_data = var.smtp_user != "" ? var.smtp_user : "undefined"
 }
 
 # SMTP Password Secret
@@ -150,7 +150,7 @@ resource "google_secret_manager_secret" "smtp_pass" {
 
 resource "google_secret_manager_secret_version" "smtp_pass_v1" {
   secret      = google_secret_manager_secret.smtp_pass.id
-  secret_data = var.smtp_pass
+  secret_data = var.smtp_pass != "" ? var.smtp_pass : "undefined"
 }
 
 # Google OAuth Client ID
@@ -163,7 +163,7 @@ resource "google_secret_manager_secret" "google_client_id" {
 
 resource "google_secret_manager_secret_version" "google_client_id_v1" {
   secret      = google_secret_manager_secret.google_client_id.id
-  secret_data = var.google_client_id
+  secret_data = var.google_client_id != "" ? var.google_client_id : "undefined"
 }
 
 # Google OAuth Client Secret
@@ -176,5 +176,5 @@ resource "google_secret_manager_secret" "google_client_secret" {
 
 resource "google_secret_manager_secret_version" "google_client_secret_v1" {
   secret      = google_secret_manager_secret.google_client_secret.id
-  secret_data = var.google_client_secret
+  secret_data = var.google_client_secret != "" ? var.google_client_secret : "undefined"
 }

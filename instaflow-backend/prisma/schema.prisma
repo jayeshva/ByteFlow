@@ -60,7 +60,12 @@ model User {
   googleId         String?  @unique
   avatarUrl        String?
   otpCode          String?
+
   otpExpiry        DateTime?
+
+  // Rate Limiting for OTPs (Signup + Forgot Password)
+  otpRateLimitCount Int      @default(0)
+  otpRateLimitReset DateTime?
 
   createdAt DateTime @default(now())
 

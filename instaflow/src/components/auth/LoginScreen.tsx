@@ -10,6 +10,7 @@ import { handleLoginSuccess } from '../../store/authActions';
 import { isValidEmail, sanitizeInput } from '../../lib/security';
 import type { AppDispatch } from '../../store/store';
 import { GoogleLogin } from '@react-oauth/google';
+import { useToast } from '../../hooks/useToast';
 
 interface LoginScreenProps {}
 
@@ -36,6 +37,7 @@ const LoginScreen: React.FC<LoginScreenProps> = () => {
 
   const navigate = useNavigate();
   const dispatch = useDispatch<AppDispatch>();
+  const toast = useToast();
   
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -165,13 +167,14 @@ const LoginScreen: React.FC<LoginScreenProps> = () => {
           }
           const verifyResult = await AuthService.verifyEmail(email, otpString);
           if (verifyResult.success) {
-            const loginResult = await AuthService.login({ email, password });
-            if (loginResult.success) {
-              await dispatch(handleLoginSuccess(loginResult));
-              navigate('/dashboard');
-            } else {
-              setError((loginResult as any).message || (loginResult as any).error || 'Login failed');
-            }
+           toast.success('Email verified successfully! Please login.');
+           setTimeout(() => {
+            setMode('login');
+            setStep('form');
+            setPassword('');
+            setOtp(['', '', '', '', '', '']);
+            navigate('/login');
+           }, 2000);
           } else {
             setError(verifyResult.error || 'Invalid verification code.');
           }

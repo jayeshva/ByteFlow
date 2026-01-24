@@ -16,9 +16,9 @@
     "docker:down": "docker-compose down"
   },
   "dependencies": {
-    "@bull-board/api": "^6.16.2",
-    "@bull-board/express": "^6.16.2",
-    "@bull-board/ui": "^6.16.2",
+    "@bull-board/api": "^6.16.4",
+    "@bull-board/express": "^6.16.4",
+    "@bull-board/ui": "^6.16.4",
     "@google-cloud/cloud-sql-connector": "^1.9.0",
     "@google-cloud/pubsub": "^5.2.2",
     "@prisma/adapter-pg": "^7.2.0",

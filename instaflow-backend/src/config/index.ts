@@ -4,7 +4,7 @@ import { z } from 'zod';
 const envSchema = z.object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.string().transform(Number).default(4000 as any),
-    DATABASE_URL: z.string().url().optional(),
+    DATABASE_URL: z.string().url(),
     INSTANCE_CONNECTION_NAME: z.string().optional(),
     DB_USER: z.string().optional(),
     DB_NAME: z.string().optional(),
@@ -12,15 +12,15 @@ const envSchema = z.object({
     JWT_REFRESH_SECRET: z.string().min(32),
 
     // SMTP Configuration
-    SMTP_HOST: z.string().optional(),
-    SMTP_PORT: z.string().transform(Number).optional(),
-    SMTP_USER: z.string().optional(),
-    SMTP_PASS: z.string().optional(),
-    SMTP_FROM: z.string().default('noreply@instaflow.me'),
+    SMTP_HOST: z.string(),
+    SMTP_PORT: z.string().transform(Number),
+    SMTP_USER: z.string(),
+    SMTP_PASS: z.string(),
+    SMTP_FROM: z.string().default('no-reply@jaydesk.com'),
 
     // Google OAuth
-    GOOGLE_CLIENT_ID: z.string().optional(),
-    GOOGLE_CLIENT_SECRET: z.string().optional(),
+    GOOGLE_CLIENT_ID: z.string(),
+    GOOGLE_CLIENT_SECRET: z.string(),
 
     // Payment Providers
     DODO_API_KEY: z.string().optional(),

@@ -804,9 +804,16 @@ export async function startPubSubWorker(): Promise<void> {
             // Acknowledge message after processing
             ack();
             console.log('✅ Event processed successfully');
-        } catch (error) {
-            console.error('❌ Event processing failed:', error);
-            throw error; // Don't ack - message will be retried by Pub/Sub
+        } catch (error: any) {
+            // Only retry if it's a rate limit error
+            if (isRateLimitError(error)) {
+                console.warn('⚠️ Rate limit error, triggering NACK for retry:', error.message);
+                throw error; // Throwing will cause Pub/Sub to NACK and retry
+            }
+
+            console.error('❌ Event processing failed (dropping):', error);
+            // ACK other errors to prevent infinite retries
+            ack();
         }
     });
 
